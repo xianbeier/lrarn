@@ -1,4 +1,4 @@
-name: Build fetch-mcp-server and Download Dist
+name: Build fetch-mcp and Download Dist
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Clone fetch-mcp-server
+      - name: Clone fetch-mcp
         run: |
           git clone https://github.com/zcaceres/fetch-mcp.git 
           cd fetch-mcp
