@@ -23,7 +23,7 @@ jobs:
     - name: Build llm_demo
       working-directory: MNN/build
       run: |
-        make -j$(nproc) llm_demo
+        cmake --build . --config Release --target llm_demo
 
     - name: Package build directory
       run: |
