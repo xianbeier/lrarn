@@ -8,14 +8,14 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout with submodules
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - name: Clone MNN repository
+        run: |
+          git clone https://github.com/alibaba/MNN.git 
       - name: Configure Project
         shell: powershell
         working-directory: ${{ github.workspace }}
         run: |
+          cd MNN
           mkdir build
           cd build
           cmake .. -DMNN_LOW_MEMORY=true -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BUILD_LLM=true -DMNN_SUPPORT_TRANSFORMER_FUSE=true
