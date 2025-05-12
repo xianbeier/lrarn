@@ -11,6 +11,7 @@ jobs:
       - name: Clone MNN repository
         run: |
           git clone https://github.com/alibaba/MNN.git 
+
       - name: Configure Project
         shell: powershell
         working-directory: ${{ github.workspace }}
@@ -19,7 +20,14 @@ jobs:
           mkdir build
           cd build
           cmake .. -DMNN_LOW_MEMORY=true -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BUILD_LLM=true -DMNN_SUPPORT_TRANSFORMER_FUSE=true
-          make -j
+
+      - name: Build Project
+        shell: powershell
+        working-directory: ${{ github.workspace }}/MNN/build
+        run: |
+          # 使用 MSBuild 编译整个解决方案（默认是 Debug 配置）
+          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" ALL_BUILD.vcxproj /p:Configuration=Release
+
       - name: Package Binaries
         shell: powershell
         working-directory: ${{ github.workspace }}
@@ -27,7 +35,8 @@ jobs:
           DATE: $(Get-Date -Format "yyyyMMdd")
         run: |
           $version = Get-Date -Format "yyyyMMdd"
-          Compress-Archive -Path "./build/bin/*" -DestinationPath "./mnn_llm_demo_$version.zip" -Force
+          Compress-Archive -Path "./MNN/build/bin/*" -DestinationPath "./mnn_llm_demo_$version.zip" -Force
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
