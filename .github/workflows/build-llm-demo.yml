@@ -37,12 +37,13 @@ jobs:
       run: |
         make -j$(nproc) llm_demo
 
-    - name: Check if llm_demo exists
+    - name: Find llm_demo binary
+      working-directory: ./MNN/build
       run: |
-        ls -l ./llm_demo
+        find . -type f -name "llm_demo" -exec ls -l {} \;
 
     - name: Upload llm_demo as artifact
       uses: actions/upload-artifact@v4
       with:
         name: llm_demo
-        path: ./MNN/build/llm_demo
+        path: ./MNN/build/tools/llm/llm_demo
