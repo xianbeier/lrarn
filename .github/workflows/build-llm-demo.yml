@@ -1,4 +1,4 @@
-name: Build MNN llm_demo on Windows and Upload Full Build
+name: Build MNN llm_demo on Windows (Full Build)
 
 on:
   workflow_dispatch:
@@ -6,22 +6,38 @@ on:
 jobs:
   build:
 
-    runs-on: windows-latest
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        arch: [x64]
 
     steps:
-    - name: Install Chocolatey and Dependencies
+    - name: Install Chocolatey
       run: |
         Set-ExecutionPolicy Bypass -Scope CurrentUser -Force
         iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1 '))
-        choco install -y cmake git visualstudio2022buildtools --no-progress
+
+    - name: Install Dependencies
+      run: |
+        choco install -y git cmake --no-progress
+
+    - name: Install Visual Studio Build Tools
+      run: |
+        choco install -y visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --includeRecommended"
 
     - name: Setup Visual Studio Environment
+      shell: cmd
       run: |
-        $env:Path += ";C:\Program Files\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
-        $env:Path += ";C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build"
-        cmd /c "call vcvarsall.bat x64 && set > %TEMP%\vcvars.txt"
-        Get-Content "$env:TEMP\vcvars.txt" | Foreach-Object {
-          if ($_ -match "^(\w+)=(.*)$") { [Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process") }
+        call "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64 && set > %TEMP%\vcvars.txt
+      env:
+        VS_VERSION: 2022
+
+    - name: Load Visual Studio Environment Variables
+      run: |
+        Get-Content "$env:TEMP\vcvars.txt" | ForEach-Object {
+          if ($_ -match '^([^=]+)=(.*)$') {
+            [Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process")
+          }
         }
 
     - name: Clone MNN Repository
