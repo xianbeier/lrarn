@@ -1,35 +1,58 @@
-name: Build MNN Windows LLM
+name: Build MNN LLM Demo (Windows)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main, master]
+  pull_request:
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
+
     steps:
-    - name: Clone MNN repository
-      run: git clone https://github.com/alibaba/MNN.git 
+      # Step 1：克隆仓库（包含子模块）
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-    - name: Create build directory
-      working-directory: MNN
-      run: |
-        mkdir build && cd build
+      # Step 2：安装构建工具（PowerShell）
+      - name: Setup Build Tools
+        shell: powershell
+        run: |
+          # 确保安装必要组件（静默模式）
+          Add-WindowsCapability -Online -Name 'OpenCL\~~\~\~0.0.1.0' -ErrorAction SilentlyContinue
+          choco install llvm ninja --acceptlicense --yes
 
-    - name: CMake for MNN
-      working-directory: MNN/build
-      run: |
-        cmake .. -DMNN_LOW_MEMORY=true -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BUILD_LLM=true -DMNN_SUPPORT_TRANSFORMER_FUSE=true -DCMAKE_CXX_FLAGS="/source-charset:utf-8 /EHsc"
-    
-    - name: Build llm_demo
-      working-directory: MNN/build
-      run: |
-        cmake --build . --config Release --target llm_demo -- /p:WarningLevel=3 /p:TreatWarningsAsErrors=false
-    - name: Package build directory
-      run: |
-        Compress-Archive -Path MNN\build\* -DestinationPath llm.zip -Force
+      # Step 3：配置CMake项目（LLM Demo专用）
+      - name: Configure Project
+        shell: powershell
+        working-directory: ${{ github.workspace }}
+        run: |
+          mkdir build
+          cd build
+          cmake -G "Ninja" -DMNN_LOW_MEMORY=true -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BUILD_LLM=true -DMNN_SUPPORT_TRANSFORMER_FUSE=true
+          
+      # Step 4：构建项目
+      - name: Build Project
+        shell: powershell
+        working-directory: ${{ github.workspace }}/build
+        run: ninja
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: artifact-llm
-        path: llm.zip
+      # Step 5：打包构建产物
+      - name: Package Binaries
+        shell: powershell
+        working-directory: ${{ github.workspace }}
+        env:
+          DATE: $(Get-Date -Format "yyyyMMdd")
+        run: |
+          $version = Get-Date -Format "yyyyMMdd"
+          Compress-Archive -Path "./build/bin/*" -DestinationPath "./mnn_llm_demo_$version.zip" -Force
+
+      # Step 6：上传构建包作为 Artifact
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mnn_llm_windows
+          path: ./mnn_llm_demo_*.zip
