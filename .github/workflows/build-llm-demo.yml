@@ -8,46 +8,29 @@ jobs:
     runs-on: windows-latest
     steps:
     - name: Clone MNN repository
-      run: |
-        git clone https://github.com/alibaba/MNN.git 
+      run: git clone https://github.com/alibaba/MNN.git 
 
     - name: Create build directory
-      working-directory: ./MNN
+      working-directory: MNN
       run: |
-        mkdir -p build && cd build
+        mkdir build && cd build
 
-    - name: Configure CMake for MNN with LLM support
-      working-directory: ./MNN/build
+    - name: CMake for MNN
+      working-directory: MNN/build
       run: |
-        cmake .. \
-          -DMNN_LOW_MEMORY=true \
-          -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true \
-          -DMNN_BUILD_LLM=true \
-          -DMNN_SUPPORT_TRANSFORMER_FUSE=true \
-          -DLLM_SUPPORT_VISION=true \
-          -DMNN_BUILD_OPENCV=true \
-          -DMNN_IMGCODECS=true \
-          -DLLM_SUPPORT_AUDIO=true \
-          -DMNN_BUILD_AUDIO=true
-          
-          
+        cmake .. -DMNN_LOW_MEMORY=true -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BUILD_LLM=true -DMNN_SUPPORT_TRANSFORMER_FUSE=true
 
     - name: Build llm_demo
-      working-directory: ./MNN/build
+      working-directory: MNN/build
       run: |
-        make -j$(nproc) llm_demo
+        cmake -j
 
-    - name: Compress build directory
+    - name: Package build directory
       run: |
-        cd ./MNN
-        tar -czf build_artifact.tar.gz build/
+        Compress-Archive -Path MNN\build\* -DestinationPath llm.zip -Force
 
-    - name: Move archive to root for upload
-      run: |
-        mv ./MNN/build_artifact.tar.gz .
-
-    - name: Upload build artifact
+    - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: mnn_build_artifact
-        path: ./build_artifact.tar.gz
+        name: artifact-llm
+        path: llm.zip
