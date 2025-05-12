@@ -1,4 +1,4 @@
-name: Build MNN LLM Demo (Windows)
+name: Build MNN Windows LLM
 
 on:
   workflow_dispatch:
@@ -6,53 +6,51 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      BUILD_DIR: ${{ github.workspace }}\MNN\build
 
     steps:
-    - name: Setup Build Tools
-      uses: msys2/setup-msys2@v2
-      with:
-        update: true
-        install: >-
-          git
-          cmake
-          make
-          mingw-w64-x86_64-toolchain
-
-    - name: Clone MNN Repository
-      shell: msys2 {0}
-      run: git clone https://github.com/alibaba/MNN.git
-
-    - name: Create Build Directory
-      shell: msys2 {0}
-      working-directory: ./MNN
-      run: mkdir -p build
-
-    - name: Configure CMake (MinGW)
-      shell: msys2 {0}
-      working-directory: ./MNN/build
+    - name: Install dependencies
       run: |
-        cmake .. \
-          -G "MinGW Makefiles" \
-          -DMNN_LOW_MEMORY=ON \
-          -DMNN_CPU_WEIGHT_DEQUANT_GEMM=ON \
-          -DMNN_BUILD_LLM=ON \
-          -DMNN_SUPPORT_TRANSFORMER_FUSE=ON \
-          -DMNN_BUILD_VISUAL=ON \
-          -DMNN_BUILD_AUDIO=ON
+        # 安装Chocolatey管理器
+        Set-ExecutionPolicy Bypass -Scope CurrentUser -Force
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1 '))
+        
+        # 安装必要工具
+        choco install -y cmake git visualstudio2022buildtools
 
-    - name: Build LLM Demo (MinGW)
-      shell: msys2 {0}
-      working-directory: ./MNN/build
-      run: make -j$(nproc) llm_demo
-
-    - name: Package Artifacts
-      shell: cmd
+    - name: Clone MNN repository
       run: |
-        7z a -ttar build_artifact.tar .\MNN\build\*
-        7z a -tgzip build_artifact.tar.gz build_artifact.tar
+        git clone https://github.com/alibaba/MNN.git 
 
-    - name: Upload Artifact
+    - name: Create build directory
+      run: |
+        New-Item -ItemType Directory -Path ${{ env.BUILD_DIR }} -Force
+
+    - name: Configure CMake for MNN with LLM support
+      working-directory: ${{ env.BUILD_DIR }}
+      run: |
+        cmake .. `
+          -DMNN_LOW_MEMORY=true `
+          -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true `
+          -DMNN_BUILD_LLM=true `
+          -DMNN_SUPPORT_TRANSFORMER_FUSE=true `
+          -DMNN_AVX512=true `
+          -DCMAKE_GENERATOR_PLATFORM=x64 `
+          -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build llm_demo
+      working-directory: ${{ env.BUILD_DIR }}
+      run: |
+        cmake --build . --target llm_demo --config Release
+
+    - name: Compress build directory
+      run: |
+        Compress-Archive -Path "${{ env.BUILD_DIR }}\*" -DestinationPath "${{ github.workspace }}\build_artifact.zip" -Force
+
+    - name: Upload build artifact
       uses: actions/upload-artifact@v4
       with:
         name: mnn_windows_build
-        path: build_artifact.tar.gz
+        path: ${{ github.workspace }}\build_artifact.zip
