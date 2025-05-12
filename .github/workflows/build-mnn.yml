@@ -12,12 +12,7 @@ jobs:
           git clone https://github.com/alibaba/MNN.git 
           cd MNN
 
-      - name: Install CMake using Chocolatey
-        run: |
-          choco install cmake --version=3.25.3 --installargs 'ADD_CMAKE_TO_PATH=System'
-          refreshenv
-
-      - name: Verify CMake installation
+      - name: Verify CMake is available
         run: |
           cmake --version
 
