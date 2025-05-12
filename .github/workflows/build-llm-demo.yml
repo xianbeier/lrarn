@@ -1,57 +1,62 @@
-name: Build MNN and Upload Build Artifact
+name: Build MNN Windows (Manual Trigger)
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-windows:
 
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
-    - name: Install dependencies
+    - name: Install Chocolatey & Dependencies
       run: |
-        sudo apt update
-        sudo apt install -y git cmake g++ make
+        Set-ExecutionPolicy Bypass -Scope CurrentUser -Force
+        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1 '))
+        choco install --yes cmake git mingw make
+
+    - name: Add MingW to PATH
+      run: |
+        $env:Path += ";C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin"
+        echo "MINGW_GCC_VERSION=$(gcc --version)"  # Test GCC is available
 
     - name: Clone MNN repository
       run: |
         git clone https://github.com/alibaba/MNN.git 
 
     - name: Create build directory
-      working-directory: ./MNN
+      working-directory: MNN
       run: |
-        mkdir -p build && cd build
+        mkdir build
+        cd build
 
-    - name: Configure CMake for MNN with LLM support
-      working-directory: ./MNN/build
+    - name: Configure CMake for MNN with LLM support (Windows)
+      working-directory: MNN/build
       run: |
-        cmake .. \
-          -DMNN_LOW_MEMORY=true \
-          -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true \
-          -DMNN_BUILD_LLM=true \
-          -DMNN_SUPPORT_TRANSFORMER_FUSE=true \
-          -DLLM_SUPPORT_VISION=true \
-          -DMNN_BUILD_OPENCV=true \
-          -DMNN_IMGCODECS=true \
-          -DMNN_AVX512=true
+        cmake .. `
+          -DMNN_LOW_MEMORY=true `
+          -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true `
+          -DMNN_BUILD_LLM=true `
+          -DMNN_SUPPORT_TRANSFORMER_FUSE=true `
+          -DLLM_SUPPORT_VISION=true `
+          -DMNN_BUILD_OPENCV=true `
+          -DMNN_IMGCODECS=true `
+          -DLLM_SUPPORT_AUDIO=true `
+          -DMNN_BUILD_AUDIO=true `
+          -G "MinGW Makefiles"
 
     - name: Build llm_demo
-      working-directory: ./MNN/build
+      working-directory: MNN/build
       run: |
-        make -j$(nproc) llm_demo
+        mingw32-make -j$(Get-CimInstance Win32_Processor | Select -ExpandProperty NumberOfLogicalProcessors) llm_demo
 
     - name: Compress build directory
       run: |
-        cd ./MNN
-        tar -czf build_artifact.tar.gz build/
+        cd ..
+        tar -czf build_artifact_windows.tar.gz build/
 
-    - name: Move archive to root for upload
-      run: |
-        mv ./MNN/build_artifact.tar.gz .
-
-    - name: Upload build artifact
+    - name: Upload Windows build artifact
       uses: actions/upload-artifact@v4
       with:
-        name: mnn_build_artifact
-        path: ./build_artifact.tar.gz
+        name: mnn_build_artifact_windows
+        path: MNN/build_artifact_windows.tar.gz
