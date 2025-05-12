@@ -23,7 +23,6 @@ jobs:
         run: |
           # 确保安装必要组件（静默模式）
           Add-WindowsCapability -Online -Name 'OpenCL\~~\~\~0.0.1.0' -ErrorAction SilentlyContinue
-          choco install llvm ninja --acceptlicense --yes
 
       # Step 3：配置CMake项目（LLM Demo专用）
       - name: Configure Project
@@ -32,7 +31,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake -G "Ninja" -DMNN_LOW_MEMORY=true -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BUILD_LLM=true -DMNN_SUPPORT_TRANSFORMER_FUSE=true
+          cmake -G "Ninja" -DMNN_LOW_MEMORY=true -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BUILD_LLM=true -DMNN_SUPPORT_TRANSFORMER_FUSE=true ..
           
       # Step 4：构建项目
       - name: Build Project
