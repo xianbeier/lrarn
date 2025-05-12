@@ -37,13 +37,20 @@ jobs:
       run: |
         make -j$(nproc) llm_demo
 
-    - name: Find llm_demo binary
+    - name: Find and show llm_demo location
       working-directory: ./MNN/build
       run: |
         find . -type f -name "llm_demo" -exec ls -l {} \;
+
+    - name: Save path to llm_demo
+      id: find_binary
+      working-directory: ./MNN/build
+      run: |
+        BINARY_PATH=$(find . -type f -name "llm_demo")
+        echo "::set-output name=path::$BINARY_PATH"
 
     - name: Upload llm_demo as artifact
       uses: actions/upload-artifact@v4
       with:
         name: llm_demo
-        path: ./MNN/build/tools/llm/llm_demo
+        path: ${{ steps.find_binary.outputs.path }}
