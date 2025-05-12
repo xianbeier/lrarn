@@ -34,7 +34,7 @@ jobs:
         working-directory: MNN
         run: |
           mkdir dist
-          copy build\tools\main\Release\runNet.exe dist\
+          copy build\tools\main\runNet.exe dist\
           copy build\*.dll dist\
 
       - name: Zip dist folder
