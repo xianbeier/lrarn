@@ -42,14 +42,13 @@ jobs:
           copy build\tools\main\Release\runNet.exe dist\
           copy build\*.dll dist\
 
-      - name: Archive binaries
-        uses: thedoctorlol/release-please-archive@v1
+      - name: Zip dist folder
+        uses: montudor/action-zip@v1
         with:
-          archive-name: mnn-windows-inference-only
-          path: MNN/dist/
+          args: zip -r mnn-windows-inference-only.zip ./dist/*
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: mnn-windows-inference-only
-          path: MNN/dist/
+          path: mnn-windows-inference-only.zip
