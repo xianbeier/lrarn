@@ -18,13 +18,17 @@ jobs:
     - name: CMake for MNN
       working-directory: MNN/build
       run: |
-        cmake .. -DMNN_LOW_MEMORY=true -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BUILD_LLM=ON -DMNN_SUPPORT_TRANSFORMER_FUSE=ON
-
+        cmake .. ^
+          -DMNN_LOW_MEMORY=true ^
+          -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true ^
+          -DMNN_BUILD_LLM=true ^
+          -DMNN_SUPPORT_TRANSFORMER_FUSE=true ^
+          -DCMAKE_CXX_FLAGS="/utf-8"
+    
     - name: Build llm_demo
       working-directory: MNN/build
       run: |
         cmake --build . --config Release --target llm_demo
-
     - name: Package build directory
       run: |
         Compress-Archive -Path MNN\build\* -DestinationPath llm.zip -Force
