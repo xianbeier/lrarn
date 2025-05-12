@@ -7,18 +7,15 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Setup Git
-        uses: git-for-windows/git@v1
+      - name: Checkout MNN Repository
+        run: |
+          git clone https://github.com/alibaba/MNN.git 
+          cd MNN
 
       - name: Setup CMake
         uses: jwlawrence/setup-cmake@v1
         with:
           version: '3.25.x'
-
-      - name: Clone MNN repository
-        run: |
-          git clone https://github.com/alibaba/MNN.git 
-          cd MNN
 
       - name: Create build directory
         working-directory: MNN
