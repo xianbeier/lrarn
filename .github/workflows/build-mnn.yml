@@ -6,10 +6,6 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    permissions:
-      contents: read
-      artifacts: write
-
     steps:
       # 1. 安装依赖工具
       - name: Install Visual Studio Build Tools
