@@ -6,51 +6,41 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    env:
-      BUILD_DIR: ${{ github.workspace }}\MNN\build
-
     steps:
-    - name: Install dependencies
-      run: |
-        # 安装Chocolatey管理器
-        Set-ExecutionPolicy Bypass -Scope CurrentUser -Force
-        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1 '))
-        
-        # 安装必要工具
-        choco install -y cmake git visualstudio2022buildtools
-
     - name: Clone MNN repository
       run: |
         git clone https://github.com/alibaba/MNN.git 
 
     - name: Create build directory
+      working-directory: ./MNN
       run: |
-        New-Item -ItemType Directory -Path ${{ env.BUILD_DIR }} -Force
+        mkdir -p build && cd build
 
     - name: Configure CMake for MNN with LLM support
-      working-directory: ${{ env.BUILD_DIR }}
+      working-directory: ./MNN/build
       run: |
-        cmake .. `
-          -DMNN_LOW_MEMORY=true `
-          -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true `
-          -DMNN_BUILD_LLM=true `
-          -DMNN_SUPPORT_TRANSFORMER_FUSE=true `
-          -DMNN_AVX512=true `
-          -DCMAKE_GENERATOR_PLATFORM=x64 `
-          -DCMAKE_BUILD_TYPE=Release
+        cmake .. \
+          -DMNN_LOW_MEMORY=true \
+          -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true \
+          -DMNN_BUILD_LLM=true \
+          -DMNN_SUPPORT_TRANSFORMER_FUSE=true
 
     - name: Build llm_demo
-      working-directory: ${{ env.BUILD_DIR }}
+      working-directory: ./MNN/build
       run: |
-        cmake --build . --target llm_demo --config Release
+        make -j$(nproc) llm_demo
 
     - name: Compress build directory
       run: |
-        Compress-Archive -Path "${{ env.BUILD_DIR }}\*" -DestinationPath "${{ github.workspace }}\build_artifact.zip" -Force
+        cd ./MNN
+        tar -czf build_artifact.tar.gz build/
+
+    - name: Move archive to root for upload
+      run: |
+        mv ./MNN/build_artifact.tar.gz .
 
     - name: Upload build artifact
       uses: actions/upload-artifact@v4
       with:
-        name: mnn_windows_build
-        path: ${{ github.workspace }}\build_artifact.zip
+        name: mnn_build_artifact
+        path: ./build_artifact.tar.gz
