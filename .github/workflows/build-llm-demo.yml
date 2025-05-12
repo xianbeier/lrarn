@@ -1,83 +1,58 @@
-name: Build MNN llm_demo on Windows (Full Build)
+name: Build MNN LLM Demo (Windows)
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-
-    runs-on: windows-2022
-    strategy:
-      matrix:
-        arch: [x64]
+    runs-on: windows-latest
 
     steps:
-    - name: Install Chocolatey
-      run: |
-        Set-ExecutionPolicy Bypass -Scope CurrentUser -Force
-        iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1 '))
-
-    - name: Install Dependencies
-      run: |
-        choco install -y git cmake --no-progress
-
-    - name: Install Visual Studio Build Tools
-      run: |
-        choco install -y visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --includeRecommended"
-
-    - name: Setup Visual Studio Environment
-      shell: cmd
-      run: |
-        call "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64 && set > %TEMP%\vcvars.txt
-      env:
-        VS_VERSION: 2022
-
-    - name: Load Visual Studio Environment Variables
-      run: |
-        Get-Content "$env:TEMP\vcvars.txt" | ForEach-Object {
-          if ($_ -match '^([^=]+)=(.*)$') {
-            [Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process")
-          }
-        }
+    - name: Setup Build Tools
+      uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        install: >-
+          git
+          cmake
+          make
+          mingw-w64-x86_64-toolchain
 
     - name: Clone MNN Repository
-      run: |
-        git clone https://github.com/alibaba/MNN.git 
+      shell: msys2 {0}
+      run: git clone https://github.com/alibaba/MNN.git
 
     - name: Create Build Directory
+      shell: msys2 {0}
       working-directory: ./MNN
-      run: |
-        mkdir build
-        cd build
+      run: mkdir -p build
 
-    - name: Configure CMake for MNN with LLM, Vision, and Audio support
+    - name: Configure CMake (MinGW)
+      shell: msys2 {0}
       working-directory: ./MNN/build
       run: |
-        cmake .. ^
-          -DMNN_LOW_MEMORY=true ^
-          -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true ^
-          -DMNN_BUILD_LLM=true ^
-          -DMNN_SUPPORT_TRANSFORMER_FUSE=true ^
-          -DLLM_SUPPORT_VISION=true ^
-          -DMNN_BUILD_OPENCV=true ^
-          -DMNN_IMGCODECS=true ^
-          -DLLM_SUPPORT_AUDIO=true ^
-          -DMNN_BUILD_AUDIO=true ^
-          -G "Visual Studio 17 2022" ^
-          -A x64
+        cmake .. \
+          -G "MinGW Makefiles" \
+          -DMNN_LOW_MEMORY=ON \
+          -DMNN_CPU_WEIGHT_DEQUANT_GEMM=ON \
+          -DMNN_BUILD_LLM=ON \
+          -DMNN_SUPPORT_TRANSFORMER_FUSE=ON \
+          -DMNN_BUILD_VISUAL=ON \
+          -DMNN_BUILD_AUDIO=ON
 
-    - name: Build llm_demo using MSBuild
+    - name: Build LLM Demo (MinGW)
+      shell: msys2 {0}
       working-directory: ./MNN/build
-      run: |
-        cmake --build . --target llm_demo --config Release
+      run: make -j$(nproc) llm_demo
 
-    - name: Compress entire build directory
+    - name: Package Artifacts
+      shell: cmd
       run: |
-        cd ./MNN
-        Compress-Archive -Path build -DestinationPath mnn_full_build_windows.zip -Force
+        7z a -ttar build_artifact.tar .\MNN\build\*
+        7z a -tgzip build_artifact.tar.gz build_artifact.tar
 
-    - name: Upload Full Build Artifact
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: mnn_full_build_windows
-        path: ./mnn_full_build_windows.zip
+        name: mnn_windows_build
+        path: build_artifact.tar.gz
