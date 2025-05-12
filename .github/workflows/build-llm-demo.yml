@@ -31,7 +31,13 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake -G "Ninja" -DMNN_LOW_MEMORY=true -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BUILD_LLM=true -DMNN_SUPPORT_TRANSFORMER_FUSE=true ..
+          cmake `
+            -G "Ninja" `
+            -DMNN_LOW_MEMORY=true `
+            -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true `
+            -DMNN_BUILD_LLM=true `
+            -DMNN_SUPPORT_TRANSFORMER_FUSE=true `
+            ..
           
       # Step 4：构建项目
       - name: Build Project
