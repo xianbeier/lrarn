@@ -35,7 +35,9 @@ jobs:
                    -DMNN_SUPPORT_TRANSFORMER_FUSE=true ^
                    -DMNN_LOW_MEMORY=true ^
                    -DMNN_AVX2=true ^
-                   -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true
+                   -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true ^
+                   -DADD_COMPILE_OPTIONS="/utf-8" ^
+                   -DADD_DEFINITIONS="-D_USE_MATH_DEFINES"
         shell: cmd
 
       # 4. 编译 MNN 和 llm_demo
