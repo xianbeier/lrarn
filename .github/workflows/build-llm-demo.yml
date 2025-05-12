@@ -34,7 +34,7 @@ jobs:
           DATE: $(Get-Date -Format "yyyyMMdd")
         run: |
           $version = Get-Date -Format "yyyyMMdd"
-          Compress-Archive -Path "./MNN/build/bin/Release/*.exe", "./MNN/build/bin/Release/*.dll" -DestinationPath "./mnn_llm_demo_$version.zip" -Force
+          Compress-Archive -Path "./MNN/build/*" -DestinationPath "./mnn_llm_demo_$version.zip" -Force
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
