@@ -12,15 +12,16 @@ jobs:
           git clone https://github.com/alibaba/MNN.git 
           cd MNN
 
-      - name: Verify CMake is available
-        run: |
-          cmake --version
+      - name: Setup CMake
+        uses: jwlawrence/setup-cmake@v1
+        with:
+          version: '3.25.x'
 
       - name: Create build directory
         working-directory: MNN
         run: mkdir build && cd build
 
-      - name: Configure with CMake (Only inference, no converter)
+      - name: Configure with CMake
         working-directory: MNN/build
         run: |
           cmake .. -DMNN_BUILD_TEST=true -DMNN_BUILD_CONVERTER=false -G "Visual Studio 17 2022" -A x64
@@ -30,12 +31,18 @@ jobs:
         run: |
           cmake --build . --config Release
 
+      - name: List build output
+        working-directory: MNN
+        run: |
+          echo "Listing build/tools/main:"
+          dir build\tools\main\Release
+
       - name: Copy binaries to dist
         working-directory: MNN
         run: |
           mkdir dist
-          copy build\tools\main\runNet.exe dist\
-          copy build\*.dll dist\
+          copy build\tools\main\Release\runNet.exe dist\
+          copy build\Release\MNN.dll dist\
 
       - name: Zip dist folder
         uses: montudor/action-zip@v1
