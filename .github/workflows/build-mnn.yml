@@ -1,56 +1,55 @@
-name: Build MNN for Windows (Only Inference) and Package .exe
+name: Build llm_demo on Windows (AVX2) - No Model (Manual)
 
 on:
+  # 仅通过手动触发（GitHub UI 或 API）
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
+      # 1. 安装依赖工具
+      - name: Install Visual Studio Build Tools
+        run: |
+          choco install --no-progress visualstudio2022buildtools
+          choco install --no-progress visualstudio2022-workload-vctools
+        shell: cmd
+
+      - name: Install CMake
+        run: |
+          choco install --no-progress cmake --version 3.29.0
+        shell: cmd
+
+      # 2. 克隆 MNN 源码
       - name: Checkout MNN Repository
-        run: |
-          git clone https://github.com/alibaba/MNN.git 
-          cd MNN
-
-      - name: Setup CMake
-        uses: jwlawrence/setup-cmake@v1
+        uses: actions/checkout@v3
         with:
-          version: '3.25.x'
+          repository: alibaba/MNN
+          submodules: recursive
 
-      - name: Create build directory
-        working-directory: MNN
-        run: mkdir build && cd build
-
-      - name: Configure with CMake
-        working-directory: MNN/build
+      # 3. 配置 CMake (启用 AVX2 和 LLM 支持)
+      - name: Configure CMake
         run: |
-          cmake .. -DMNN_BUILD_TEST=true -DMNN_BUILD_CONVERTER=false -G "Visual Studio 17 2022" -A x64
+          mkdir build && cd build
+          cmake .. -G "Visual Studio 17 2022" \
+                   -DMNN_BUILD_LLM=true \
+                   -DMNN_SUPPORT_TRANSFORMER_FUSE=true \
+                   -DMNN_LOW_MEMORY=true \
+                   -DMNN_AVX2=true \
+                   -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true
+        shell: cmd
 
-      - name: Build Release
-        working-directory: MNN/build
+      # 4. 编译 MNN 和 llm_demo
+      - name: Build MNN and llm_demo
         run: |
-          cmake --build . --config Release
+          cd build
+          cmake --build . --target llm_demo --config Release
+        shell: cmd
 
-      - name: List build output
-        working-directory: MNN
-        run: |
-          echo "Listing build/tools/main:"
-          dir build\tools\main\Release
-
-      - name: Copy binaries to dist
-        working-directory: MNN
-        run: |
-          mkdir dist
-          copy build\tools\main\Release\runNet.exe dist\
-          copy build\Release\MNN.dll dist\
-
-      - name: Zip dist folder
-        uses: montudor/action-zip@v1
+      # 5. 上传构建产物（仅 llm_demo.exe）
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
         with:
-          args: zip -r mnn-windows-inference-only.zip ./dist/*
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: mnn-windows-inference-only
-          path: mnn-windows-inference-only.zip
+          name: llm_demo_win_avx2
+          path: |
+            build/Release/llm_demo.exe
