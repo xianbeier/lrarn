@@ -1,4 +1,4 @@
-name: Build llm_demo (Manual Trigger)
+name: Build MNN and Upload Build Artifact
 
 on:
   workflow_dispatch:
@@ -37,20 +37,17 @@ jobs:
       run: |
         make -j$(nproc) llm_demo
 
-    - name: Find and show llm_demo location
-      working-directory: ./MNN/build
+    - name: Compress build directory
       run: |
-        find . -type f -name "llm_demo" -exec ls -l {} \;
+        cd ./MNN
+        tar -czf build_artifact.tar.gz build/
 
-    - name: Save path to llm_demo
-      id: find_binary
-      working-directory: ./MNN/build
+    - name: Move archive to root for upload
       run: |
-        BINARY_PATH=$(find . -type f -name "llm_demo")
-        echo "::set-output name=path::$BINARY_PATH"
+        mv ./MNN/build_artifact.tar.gz .
 
-    - name: Upload llm_demo as artifact
+    - name: Upload build artifact
       uses: actions/upload-artifact@v4
       with:
-        name: llm_demo
-        path: ${{ steps.find_binary.outputs.path }}
+        name: mnn_build_artifact
+        path: ./build_artifact.tar.gz
