@@ -25,11 +25,13 @@ jobs:
           VCPKG_ROOT: "C:/vcpkg"
         run: |
           cmake .. -DCMAKE_BUILD_TYPE=Release -DMNN_LOW_MEMORY=true -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BUILD_LLM=true -DMNN_SUPPORT_TRANSFORMER_FUSE=true -DLLM_SUPPORT_AUDIO=true -DMNN_BUILD_AUDIO=true -DBUILD_MLS=true -DCMAKE_CXX_FLAGS="/D_USE_MATH_DEFINES /EHsc" -DLLM_SUPPORT_VISION=true -DMNN_BUILD_OPENCV=true -DMNN_IMGCODECS=true
+          # 输出 CMake 配置信息
+          Get-Content CMakeCache.txt
 
       - name: Build All Demos
         working-directory: ${{ github.workspace }}/MNN/build
         run: |
-          cmake --build . --config Release
+          cmake --build . --config Release --verbose # 添加 --verbose 输出详细编译信息
 
       - name: Package Binaries
         shell: powershell
