@@ -40,7 +40,7 @@ jobs:
       - name: Build Project
         working-directory: ${{ github.workspace }}/MNN/build
         run: |
-          cmake --build . --config Release --target MNNLLMChat
+          cmake --build . --config Release
 
       - name: Package Binaries
         shell: powershell
