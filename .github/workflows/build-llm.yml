@@ -36,7 +36,7 @@ jobs:
             -DLLM_SUPPORT_AUDIO=true `
             -DMNN_BUILD_AUDIO=true `
             -DBUILD_MLS=true `
-            -DCMAKE_CXX_FLAGS="/D_USE_MATH_DEFINES"
+            -DCMAKE_CXX_FLAGS="/D_USE_MATH_DEFINES /EHsc"
       - name: Build Project
         working-directory: ${{ github.workspace }}/MNN/build
         run: |
