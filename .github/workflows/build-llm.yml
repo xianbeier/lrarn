@@ -19,9 +19,11 @@ jobs:
         run: |
           mkdir ./MNN/build
 
-      - name: Configure Project with MSVC
+      - name: Configure Project with MSVC and Full OpenCV
         shell: powershell
         working-directory: ${{ github.workspace }}/MNN/build
+        env:
+          VCPKG_ROOT: "C:/vcpkg"
         run: |
           cmake .. -G "Visual Studio 17 2022" `
             -DCMAKE_BUILD_TYPE=Release `
@@ -33,14 +35,26 @@ jobs:
             -DLLM_SUPPORT_VISION=true `
             -DMNN_BUILD_OPENCV=true `
             -DMNN_IMGCODECS=true `
+            -DMNN_OPENCV_RUNTIMES=ON `
             -DLLM_SUPPORT_AUDIO=true `
             -DMNN_BUILD_AUDIO=true `
             -DBUILD_MLS=true `
             -DCMAKE_CXX_FLAGS="/D_USE_MATH_DEFINES /EHsc"
-      - name: Build Project
+
+      - name: Build All Demos
         working-directory: ${{ github.workspace }}/MNN/build
         run: |
           cmake --build . --config Release
+
+      - name: Check if transformerDemo.out.exe exists
+        shell: powershell
+        working-directory: ${{ github.workspace }}/MNN/build
+        run: |
+          if (Test-Path "./Release/transformerDemo.out.exe") {
+            Write-Output "✅ transformerDemo.out.exe built successfully!"
+          } else {
+            Write-Error "❌ Failed to build transformerDemo.out.exe"
+          }
 
       - name: Package Binaries
         shell: powershell
