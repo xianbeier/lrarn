@@ -12,6 +12,11 @@ jobs:
           repository: alibaba/MNN
           path: MNN
           ref: master
+          
+      - name: Install dependencies
+        run: |
+          # 安装必要的依赖项，例如 OpenCV、Eigen 等
+          choco install -y opencv eigen
 
       - name: Build MNN
         working-directory: MNN
