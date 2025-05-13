@@ -1,0 +1,27 @@
+name: Build MNN
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout MNN
+        uses: actions/checkout@v4
+        with:
+          repository: alibaba/MNN
+          path: MNN
+          ref: master
+
+      - name: Build MNN
+        working-directory: MNN
+        run: |
+          mkdir build && cd build
+          cmake -DMNN_BUILD_TEST=ON ..
+          cmake --build . -j4
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mnn-build
+          path: MNN/build/Release/*
