@@ -1,4 +1,4 @@
-name: Build MNN LLM Demo (Windows)
+name: Build MNN LLM Demo
 
 on:
   workflow_dispatch:
@@ -12,21 +12,20 @@ jobs:
       - name: Clone MNN repository
         run: |
           git clone https://github.com/alibaba/MNN.git 
+
       - name: Clean Build Directory
         shell: powershell
         working-directory: ${{ github.workspace }}
         run: |
           mkdir ./MNN/build
-      - name: Configure Project
+
+      - name: Configure Project with MSVC
         shell: powershell
         working-directory: ${{ github.workspace }}/MNN/build
         run: |
-          cmake .. -G Ninja `
-            -DCMAKE_C_COMPILER="C:\Program Files\LLVM\bin\clang.exe" `
-            -DCMAKE_CXX_COMPILER="C:\Program Files\LLVM\bin\clang++.exe" `
-            -DCMAKE_LINKER="C:\Program Files\LLVM\bin\lld.exe" `
+          cmake .. -G "Visual Studio 17 2022" `
             -DCMAKE_BUILD_TYPE=Release `
-            -DMNN_BUILD_DEMO=ON `
+            -DMNN_BUILD_DEMO=true `
             -DMNN_LOW_MEMORY=true `
             -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true `
             -DMNN_BUILD_LLM=true `
@@ -36,12 +35,13 @@ jobs:
             -DMNN_IMGCODECS=true `
             -DLLM_SUPPORT_AUDIO=true `
             -DMNN_BUILD_AUDIO=true `
-            -DBUILD_MLS=true  `
-            -DCMAKE_CXX_FLAGS="/D_USE_MATH_DEFINES /EHsc"
+            -DBUILD_MLS=true
+
       - name: Build Project
         working-directory: ${{ github.workspace }}/MNN/build
-        run: | 
-          ninja
+        run: |
+          cmake --build . --config Release --target MNNLLMChat
+
       - name: Package Binaries
         shell: powershell
         working-directory: ${{ github.workspace }}
@@ -50,6 +50,7 @@ jobs:
         run: |
           $version = Get-Date -Format "yyyyMMdd"
           Compress-Archive -Path "./MNN/build/Release/*" -DestinationPath "./mnn_llm_demo_$version.zip" -Force
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
