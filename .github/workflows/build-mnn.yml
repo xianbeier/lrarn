@@ -15,8 +15,8 @@ jobs:
           
       - name: Install dependencies
         run: |
-          # 安装必要的依赖项，例如 OpenCV、Eigen 等
-          choco install -y opencv eigen
+          # 安装必要的依赖项
+          choco install -y opencv openssl
 
       - name: Build MNN
         working-directory: MNN
