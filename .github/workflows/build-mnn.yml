@@ -11,29 +11,7 @@ jobs:
         with: 
           repository: alibaba/MNN 
           path: MNN 
-          ref: master 
-      - name: Install OpenCV
-        run: |
-          choco install opencv -y
-
-      - name: 修复源代码问题
-        working-directory: MNN
-        run: |
-          # 2. 修复 Matrix 静态成员未定义问题
-          $MATRIX_FIX = @"
-          // 添加在 Matrix.cpp 文件末尾
-          void (*const MNN::CV::Matrix::gMapXYProcs[])(const Matrix&, float, float, Point*) = {
-              nullptr
-          };
-          
-          void (*const MNN::CV::Matrix::gMapPtsProcs[])(const Matrix&, Point*, const Point*, int) = {
-              nullptr
-          };
-          "@
-          Add-Content -Path tools/cv/Matrix.cpp -Value $MATRIX_FIX
-
-          # 3. 设置编译器使用UTF-8编码
-          Add-Content -Path CMakeLists.txt -Value "`nadd_compile_options(/utf-8)`n"
+          ref: 3.1.0 
 
       - name: Build MNN 
         working-directory: MNN 
