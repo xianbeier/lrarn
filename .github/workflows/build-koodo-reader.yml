@@ -19,12 +19,18 @@ jobs:
 
       - name: Install dependencies
         working-directory: koodo-reader
-        run: npm install
+        run: npm install -g yarn
+        
+      - name: Install dependencies
+        working-directory: koodo-reader
+        run: |
+          yarn install
 
       - name: Build project
         working-directory: koodo-reader
-        run: npm run build
-
+        run: |
+          yarn build
+          
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
