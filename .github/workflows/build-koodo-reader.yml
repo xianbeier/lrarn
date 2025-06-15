@@ -10,29 +10,34 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # 使用与项目兼容的 Node.js 版本
+          node-version: '20'
 
-      - name: Clone pic-smaller repository
+      - name: Clone repository
         run: |
           git clone https://github.com/koodo-reader/koodo-reader.git 
-          cd koodo-reader
+
+      - name: Setup Yarn
+        working-directory: koodo-reader
+        run: |
+          npm install -g yarn
 
       - name: Install dependencies
         working-directory: koodo-reader
-        run: npm install -g yarn
-        
-      - name: Install dependencies
+        run: |
+          yarn install --legacy-peer-deps
+
+      - name: Update browserslist DB (optional)
         working-directory: koodo-reader
         run: |
-          yarn install
+          npx update-browserslist-db@latest
 
       - name: Build project
         working-directory: koodo-reader
         run: |
           yarn build
-          
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: koodo-reader-dist
-          path: koodo-reader/dist/
+          path: koodo-reader/build/
