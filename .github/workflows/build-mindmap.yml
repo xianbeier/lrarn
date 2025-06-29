@@ -1,7 +1,7 @@
-name: Build pic-smaller and Download Dist
+name: Build Mind Map
 
 on:
-  workflow_dispatch: # 允许手动运行构建任务
+  workflow_dispatch: # 手动触发构建任务
 
 jobs:
   build:
@@ -10,34 +10,38 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # 使用与项目兼容的 Node.js 版本
+          node-version: '20'  # 使用兼容的 Node.js 版本
 
-      - name: Clone repository
+      - name: Clone Repository
         run: |
           git clone https://github.com/wanglin2/mind-map.git 
           cd mind-map
-          cd simple-mind-map
+          ls -la
 
-      - name: Install dependencies
-        working-directory: simple-mind-map
-        run:  |
-          npm i
+      - name: Install Dependencies for simple-mind-map
+        working-directory: mind-map/simple-mind-map
+        run: |
+          npm install
           npm link
-          cd ..
-          cd web
-          npm i
+
+      - name: Install Dependencies for web
+        working-directory: mind-map/web
+        run: |
+          npm install
           npm link simple-mind-map
 
-      - name: web/package.json
+      - name: Modify Build Script in web/package.json (Optional)
+        working-directory: mind-map/web
         run: |
-          sed -i 's/"build": "vue-cli-service build && node ..\/copy.js"/"build": "vue-cli-service build"/' web/package.json
-      
-      - name: Build project
-        working-directory: pic-smaller
-        run: npm run build
+          sed -i 's/"build": "vue-cli-service build && node ..\/copy.js"/"build": "vue-cli-service build"/' package.json
 
-      - name: Upload artifact
+      - name: Build Project
+        working-directory: mind-map/web
+        run: |
+          npm run build
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pic-smaller-dist
-          path: pic-smaller/dist/
+          name: mind-map-dist
+          path: mind-map/web/dist/
