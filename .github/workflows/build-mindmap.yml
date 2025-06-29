@@ -10,7 +10,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # 使用兼容的 Node.js 版本
+          node-version: '16'  # 使用兼容的 Node.js 版本
 
       - name: Clone Repository
         run: |
