@@ -44,4 +44,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mind-map-dist
-          path: mind-map/web
+          path: mind-map/dist
