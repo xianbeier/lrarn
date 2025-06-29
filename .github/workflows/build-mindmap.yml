@@ -1,0 +1,56 @@
+name: Build MindMap Project (Manual Trigger)
+
+on:
+  workflow_dispatch:  # 手动触发
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 🚀 Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: 🔧 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: 📦 Install Dependencies for simple-mind-map
+      working-directory: ./simple-mind-map
+      run: |
+        npm install
+
+    - name: 🔗 Link simple-mind-map
+      working-directory: ./simple-mind-map
+      run: |
+        npm link
+
+    - name: 📦 Install Dependencies for web
+      working-directory: ./web
+      run: |
+        npm install
+        npm link simple-mind-map
+
+    - name: 📝 Modify build script in package.json
+      working-directory: ./web
+      run: |
+        sed -i 's/"build": "vue-cli-service build && node ..\/copy.js"/"build": "vue-cli-service build"/' package.json
+
+    - name: 🏗️ Build Project
+      working-directory: ./web
+      run: |
+        npm run build
+
+    - name: 📁 Archive dist folder
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-folder
+        path: ./web/dist
+
+    - name: 📄 Archive index.html
+      uses: actions/upload-artifact@v4
+      with:
+        name: index-html
+        path: ./web/dist/index.html
