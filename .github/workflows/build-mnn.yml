@@ -11,15 +11,15 @@ jobs:
         with: 
           repository: alibaba/MNN 
           path: MNN 
-          ref: 3.1.0 
+          ref: master 
 
       - name: Build MNN 
         working-directory: MNN 
         run: | 
           mkdir build && cd build 
           #  -DLLM_SUPPORT_AUDIO=true -DMNN_BUILD_AUDIO=true -DBUILD_MLS=true -DMNN_BUILD_TRAIN=true -DMNN_USE_OPENCV=true 
-          cmake .. -DCMAKE_CXX_FLAGS="/D_USE_MATH_DEFINES /EHsc" -DMNN_LOW_MEMORY=true -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BUILD_LLM=true -DMNN_SUPPORT_TRANSFORMER_FUSE=true -DLLM_SUPPORT_VISION=true -DMNN_BUILD_OPENCV=true -DMNN_IMGCODECS=true -DOpenCV_DIR="C:/tools/opencv/build"
-          cmake --build . --config Release
+          cmake .. -DLLM_SUPPORT_VISION=ON -DMNN_BUILD_OPENCV=ON -DMNN_IMGCODECS=ON -DLLM_SUPPORT_AUDIO=ON -DMNN_BUILD_AUDIO=ON -DMNN_LOW_MEMORY=true _DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BULLD_LLM=true -DMNN_SUPPORT_TRANSFORMER_FUSR=true
+          make -j
       - name: Upload artifacts 
         uses: actions/upload-artifact@v4 
         with: 
