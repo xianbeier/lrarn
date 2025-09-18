@@ -4,9 +4,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-portable:
+  build-static:
     runs-on: windows-latest
     steps:
+      - name: Checkout dummy (not needed)
+        run: echo "No source checkout needed — vcpkg will fetch libheif"
+
       - name: Clone vcpkg
         run: |
           git clone https://github.com/microsoft/vcpkg.git
@@ -14,81 +17,45 @@ jobs:
           .\bootstrap-vcpkg.bat
         shell: cmd
 
-      - name: Install libheif with tools (dynamic)
+      - name: Install libheif (static)
         run: |
           cd vcpkg
-          .\vcpkg install libheif[tools]:x64-windows
+          .\vcpkg install libheif:x64-windows-static
         shell: cmd
 
       - name: Create output directory
         run: mkdir ${{ github.workspace }}\dist\bin
         shell: cmd
 
-      - name: Locate and copy binaries
+      - name: Copy static binaries
         shell: pwsh
         run: |
-          $vcpkgRoot = "${{ github.workspace }}\vcpkg"
-          $srcBin = "$vcpkgRoot\installed\x64-windows\bin"
+          $srcBin = "${{ github.workspace }}\vcpkg\installed\x64-windows-static\bin"
           $dstBin = "${{ github.workspace }}\dist\bin"
 
-          # 检查路径是否存在
-          if (-not (Test-Path $srcBin)) {
-              throw "❌ Binaries directory not found: $srcBin"
-          }
+          Copy-Item "$srcBin\heif-enc.exe" -Destination $dstBin -Force
+          Copy-Item "$srcBin\heif-dec.exe" -Destination $dstBin -Force
 
-          # 复制 heif 工具
-          $tools = @("heif-enc.exe", "heif-dec.exe")
-          foreach ($tool in $tools) {
-              $srcTool = Join-Path $srcBin $tool
-              if (Test-Path $srcTool) {
-                  Copy-Item $srcTool -Destination $dstBin -Force
-                  Write-Host "✅ Copied $tool"
-              } else {
-                  throw "❌ $tool not found in $srcBin"
-              }
-          }
+          Write-Host "✅ Copied static binaries: heif-enc.exe, heif-dec.exe"
 
-          # 复制所有依赖 DLL
-          Get-ChildItem "$srcBin\*.dll" | ForEach-Object {
-              Copy-Item $_.FullName -Destination $dstBin -Force
-              Write-Host "📦 Copied $($_.Name)"
-          }
-
-          # 复制 VC++ 运行时（确保在任何机器上运行）
-          $vcDlls = @("vcruntime140.dll", "msvcp140.dll", "concrt140.dll", "vcruntime140_1.dll")
-          foreach ($dll in $vcDlls) {
-              $systemPath = "C:\Windows\System32\$dll"
-              if (Test-Path $systemPath) {
-                  Copy-Item $systemPath -Destination $dstBin -Force
-                  Write-Host "📦 Copied system $dll"
-              } else {
-                  Write-Warning "⚠️ $dll not found in System32"
-              }
-          }
-
-      - name: Verify final binaries
+      - name: Verify files exist
         shell: pwsh
         run: |
-          $dstBin = "${{ github.workspace }}\dist\bin"
-          $required = @("heif-enc.exe", "heif-dec.exe", "libheif.dll")
-          foreach ($file in $required) {
-              $path = Join-Path $dstBin $file
-              if (-not (Test-Path $path)) {
-                  throw "❌ Required file missing: $file"
-              }
-              Write-Host "✔️ Verified: $file"
-          }
+          $exe1 = "${{ github.workspace }}\dist\bin\heif-enc.exe"
+          $exe2 = "${{ github.workspace }}\dist\bin\heif-dec.exe"
+          if (-not (Test-Path $exe1)) { throw "heif-enc.exe not found!" }
+          if (-not (Test-Path $exe2)) { throw "heif-dec.exe not found!" }
+          Write-Host "✅ All binaries verified."
 
       - name: Create VERSION file
         run: |
-          echo libheif portable build via vcpkg > ${{ github.workspace }}\dist\VERSION.txt
-          echo triplet: x64-windows >> ${{ github.workspace }}\dist\VERSION.txt
-          echo features: tools >> ${{ github.workspace }}\dist\VERSION.txt
+          echo libheif static build via vcpkg > ${{ github.workspace }}\dist\VERSION.txt
+          echo triplet: x64-windows-static >> ${{ github.workspace }}\dist\VERSION.txt
           echo build date: %DATE% %TIME% >> ${{ github.workspace }}\dist\VERSION.txt
         shell: cmd
 
-      - name: Upload artifact
+      - name: Upload static artifact
         uses: actions/upload-artifact@v4
         with:
-          name: libheif-portable-windows-x64
+          name: libheif-static-windows-x64
           path: ${{ github.workspace }}\dist\
