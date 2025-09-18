@@ -1,0 +1,83 @@
+name: Build libheif for Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout libheif source
+        uses: actions/checkout@v4
+        with:
+          repository: strukturag/libheif
+          submodules: recursive
+
+      - name: Install MSYS2 + MinGW-w64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-libde265
+            mingw-w64-x86_64-x265
+            mingw-w64-x86_64-libaom
+            mingw-w64-x86_64-rav1e
+            mingw-w64-x86_64-svt-av1
+
+      - name: Create build directory
+        run: mkdir build
+        shell: msys2 {0}
+
+      - name: Configure CMake
+        working-directory: build
+        run: |
+          cmake .. \
+            -G "Ninja" \
+            --preset ${{ github.event.inputs.preset || 'release-noplugins' }} \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=./install \
+            ${{ github.event.inputs.include_plugins == 'true' && '-DENABLE_PLUGIN_LOADING=ON' || '' }}
+        shell: msys2 {0}
+
+      - name: Build libheif
+        working-directory: build
+        run: cmake --build . --config Release -j 4
+        shell: msys2 {0}
+
+      - name: Install to local directory (optional)
+        working-directory: build
+        run: cmake --install . --prefix ./install
+        shell: msys2 {0}
+
+      - name: Collect binaries for artifact
+        run: |
+          mkdir -p ./dist/bin
+          cp ./build/libheif.dll ./dist/bin/
+          cp ./build/libheif.lib ./dist/bin/
+          cp ./build/examples/heif-enc.exe ./dist/bin/
+          cp ./build/examples/heif-dec.exe ./dist/bin/
+
+          # Copy required runtime DLLs
+          cp "${MINGW_PREFIX}"/bin/libde265*.dll ./dist/bin/
+          cp "${MINGW_PREFIX}"/bin/libaom*.dll ./dist/bin/
+          cp "${MINGW_PREFIX}"/bin/libx265*.dll ./dist/bin/
+          cp "${MINGW_PREFIX}"/bin/libgcc_s_seh-1.dll ./dist/bin/
+          cp "${MINGW_PREFIX}"/bin/libstdc++-6.dll ./dist/bin/
+          cp "${MINGW_PREFIX}"/bin/libwinpthread-1.dll ./dist/bin/
+
+          # Optional: include version info
+          echo "Built libheif $(git describe --tags --always)" > ./dist/VERSION.txt
+          echo "Preset: ${{ github.event.inputs.preset || 'release-noplugins' }}" >> ./dist/VERSION.txt
+        shell: msys2 {0}
+
+      - name: Upload Windows binaries as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libheif-windows-x64
+          path: ./dist/
