@@ -4,12 +4,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-static:
+  build-portable:
     runs-on: windows-latest
     steps:
-      - name: Checkout dummy (not needed)
-        run: echo "No source checkout needed — vcpkg will fetch libheif"
-
       - name: Clone vcpkg
         run: |
           git clone https://github.com/microsoft/vcpkg.git
@@ -17,26 +14,45 @@ jobs:
           .\bootstrap-vcpkg.bat
         shell: cmd
 
-      - name: Install libheif (static)
+      - name: Install libheif (dynamic)
         run: |
           cd vcpkg
-          .\vcpkg install libheif:x64-windows-static
+          .\vcpkg install libheif:x64-windows
         shell: cmd
 
       - name: Create output directory
         run: mkdir ${{ github.workspace }}\dist\bin
         shell: cmd
 
-      - name: Copy static binaries
+      - name: Copy binaries and dependencies
         shell: pwsh
         run: |
-          $srcBin = "${{ github.workspace }}\vcpkg\installed\x64-windows-static\bin"
+          $vcpkgRoot = "${{ github.workspace }}\vcpkg"
+          $srcBin = "$vcpkgRoot\installed\x64-windows\bin"
           $dstBin = "${{ github.workspace }}\dist\bin"
 
+          # 复制主程序
           Copy-Item "$srcBin\heif-enc.exe" -Destination $dstBin -Force
           Copy-Item "$srcBin\heif-dec.exe" -Destination $dstBin -Force
+          Copy-Item "$srcBin\libheif.dll" -Destination $dstBin -Force
 
-          Write-Host "✅ Copied static binaries: heif-enc.exe, heif-dec.exe"
+          # 复制所有依赖 DLL（来自 vcpkg）
+          Get-ChildItem "$srcBin\*.dll" | ForEach-Object {
+              if ($_.Name -ne "libheif.dll") {
+                  Copy-Item $_.FullName -Destination $dstBin -Force
+              }
+          }
+
+          # 复制系统运行时（VC++ Redist）
+          $systemDlls = @("vcruntime140.dll", "msvcp140.dll", "concrt140.dll", "vcruntime140_1.dll")
+          foreach ($dll in $systemDlls) {
+              $found = Get-ChildItem -Path "C:\Windows\System32\$dll" -ErrorAction SilentlyContinue
+              if ($found) {
+                  Copy-Item $found.FullName -Destination $dstBin -Force
+              }
+          }
+
+          Write-Host "✅ All binaries and dependencies copied."
 
       - name: Verify files exist
         shell: pwsh
@@ -49,13 +65,13 @@ jobs:
 
       - name: Create VERSION file
         run: |
-          echo libheif static build via vcpkg > ${{ github.workspace }}\dist\VERSION.txt
-          echo triplet: x64-windows-static >> ${{ github.workspace }}\dist\VERSION.txt
+          echo libheif portable build via vcpkg > ${{ github.workspace }}\dist\VERSION.txt
+          echo triplet: x64-windows >> ${{ github.workspace }}\dist\VERSION.txt
           echo build date: %DATE% %TIME% >> ${{ github.workspace }}\dist\VERSION.txt
         shell: cmd
 
-      - name: Upload static artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: libheif-static-windows-x64
+          name: libheif-portable-windows-x64
           path: ${{ github.workspace }}\dist\
