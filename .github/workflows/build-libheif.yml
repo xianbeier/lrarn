@@ -37,7 +37,7 @@ jobs:
       - name: Configure with CMake Preset
         working-directory: build
         run: |
-          cmake .. --preset ${{ github.event.inputs.preset }}
+          cmake .. --preset release-noplugins
         shell: msys2 {0}
 
       - name: Build with CMake
