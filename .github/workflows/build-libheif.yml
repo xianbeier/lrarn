@@ -7,39 +7,45 @@ jobs:
   build-static:
     runs-on: windows-latest
     steps:
-      - name: Set up vcpkg and install libheif (static)
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitURL: https://github.com/microsoft/vcpkg.git
-          vcpkgTriplet: x64-windows-static
-          vcpkgArguments: libheif
+      - name: Checkout dummy (not needed)
+        run: echo "No source checkout needed — vcpkg will fetch libheif"
 
-      - name: Create output directory
+      - name: Clone vcpkg
         run: |
-          mkdir ${{ github.workspace }}\dist\bin
+          git clone https://github.com/microsoft/vcpkg.git
+          cd vcpkg
+          .\bootstrap-vcpkg.bat
         shell: cmd
 
-      - name: Copy static binaries (no DLLs needed!)
+      - name: Install libheif (static)
+        run: |
+          cd vcpkg
+          .\vcpkg install libheif:x64-windows-static
+        shell: cmd
+
+      - name: Create output directory
+        run: mkdir ${{ github.workspace }}\dist\bin
+        shell: cmd
+
+      - name: Copy static binaries
         shell: pwsh
         run: |
           $srcBin = "${{ github.workspace }}\vcpkg\installed\x64-windows-static\bin"
           $dstBin = "${{ github.workspace }}\dist\bin"
 
-          # 静态构建的 EXE 不依赖任何 DLL，直接复制即可
           Copy-Item "$srcBin\heif-enc.exe" -Destination $dstBin -Force
           Copy-Item "$srcBin\heif-dec.exe" -Destination $dstBin -Force
 
-          Write-Host "✅ Static EXEs copied. No DLLs required."
+          Write-Host "✅ Copied static binaries: heif-enc.exe, heif-dec.exe"
 
-      - name: Verify no DLL dependencies (optional)
+      - name: Verify files exist
         shell: pwsh
         run: |
-          $exePath = "${{ github.workspace }}\dist\bin\heif-enc.exe"
-          if (Test-Path $exePath) {
-              Write-Host "🔍 Checking dependencies for $exePath..."
-              # 使用 dumpbin 查看导入表（应只有系统核心 DLL）
-              & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" /DEPENDENTS $exePath
-          }
+          $exe1 = "${{ github.workspace }}\dist\bin\heif-enc.exe"
+          $exe2 = "${{ github.workspace }}\dist\bin\heif-dec.exe"
+          if (-not (Test-Path $exe1)) { throw "heif-enc.exe not found!" }
+          if (-not (Test-Path $exe2)) { throw "heif-dec.exe not found!" }
+          Write-Host "✅ All binaries verified."
 
       - name: Create VERSION file
         run: |
