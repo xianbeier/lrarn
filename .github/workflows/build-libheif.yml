@@ -14,59 +14,76 @@ jobs:
           .\bootstrap-vcpkg.bat
         shell: cmd
 
-      - name: Install libheif (dynamic)
+      - name: Install libheif with tools (dynamic)
         run: |
           cd vcpkg
-          .\vcpkg install libheif:x64-windows
+          .\vcpkg install libheif[tools]:x64-windows
         shell: cmd
 
       - name: Create output directory
         run: mkdir ${{ github.workspace }}\dist\bin
         shell: cmd
 
-      - name: Copy binaries and dependencies
+      - name: Locate and copy binaries
         shell: pwsh
         run: |
           $vcpkgRoot = "${{ github.workspace }}\vcpkg"
           $srcBin = "$vcpkgRoot\installed\x64-windows\bin"
           $dstBin = "${{ github.workspace }}\dist\bin"
 
-          # 复制主程序
-          Copy-Item "$srcBin\heif-enc.exe" -Destination $dstBin -Force
-          Copy-Item "$srcBin\heif-dec.exe" -Destination $dstBin -Force
-          Copy-Item "$srcBin\libheif.dll" -Destination $dstBin -Force
+          # 检查路径是否存在
+          if (-not (Test-Path $srcBin)) {
+              throw "❌ Binaries directory not found: $srcBin"
+          }
 
-          # 复制所有依赖 DLL（来自 vcpkg）
+          # 复制 heif 工具
+          $tools = @("heif-enc.exe", "heif-dec.exe")
+          foreach ($tool in $tools) {
+              $srcTool = Join-Path $srcBin $tool
+              if (Test-Path $srcTool) {
+                  Copy-Item $srcTool -Destination $dstBin -Force
+                  Write-Host "✅ Copied $tool"
+              } else {
+                  throw "❌ $tool not found in $srcBin"
+              }
+          }
+
+          # 复制所有依赖 DLL
           Get-ChildItem "$srcBin\*.dll" | ForEach-Object {
-              if ($_.Name -ne "libheif.dll") {
-                  Copy-Item $_.FullName -Destination $dstBin -Force
+              Copy-Item $_.FullName -Destination $dstBin -Force
+              Write-Host "📦 Copied $($_.Name)"
+          }
+
+          # 复制 VC++ 运行时（确保在任何机器上运行）
+          $vcDlls = @("vcruntime140.dll", "msvcp140.dll", "concrt140.dll", "vcruntime140_1.dll")
+          foreach ($dll in $vcDlls) {
+              $systemPath = "C:\Windows\System32\$dll"
+              if (Test-Path $systemPath) {
+                  Copy-Item $systemPath -Destination $dstBin -Force
+                  Write-Host "📦 Copied system $dll"
+              } else {
+                  Write-Warning "⚠️ $dll not found in System32"
               }
           }
 
-          # 复制系统运行时（VC++ Redist）
-          $systemDlls = @("vcruntime140.dll", "msvcp140.dll", "concrt140.dll", "vcruntime140_1.dll")
-          foreach ($dll in $systemDlls) {
-              $found = Get-ChildItem -Path "C:\Windows\System32\$dll" -ErrorAction SilentlyContinue
-              if ($found) {
-                  Copy-Item $found.FullName -Destination $dstBin -Force
-              }
-          }
-
-          Write-Host "✅ All binaries and dependencies copied."
-
-      - name: Verify files exist
+      - name: Verify final binaries
         shell: pwsh
         run: |
-          $exe1 = "${{ github.workspace }}\dist\bin\heif-enc.exe"
-          $exe2 = "${{ github.workspace }}\dist\bin\heif-dec.exe"
-          if (-not (Test-Path $exe1)) { throw "heif-enc.exe not found!" }
-          if (-not (Test-Path $exe2)) { throw "heif-dec.exe not found!" }
-          Write-Host "✅ All binaries verified."
+          $dstBin = "${{ github.workspace }}\dist\bin"
+          $required = @("heif-enc.exe", "heif-dec.exe", "libheif.dll")
+          foreach ($file in $required) {
+              $path = Join-Path $dstBin $file
+              if (-not (Test-Path $path)) {
+                  throw "❌ Required file missing: $file"
+              }
+              Write-Host "✔️ Verified: $file"
+          }
 
       - name: Create VERSION file
         run: |
           echo libheif portable build via vcpkg > ${{ github.workspace }}\dist\VERSION.txt
           echo triplet: x64-windows >> ${{ github.workspace }}\dist\VERSION.txt
+          echo features: tools >> ${{ github.workspace }}\dist\VERSION.txt
           echo build date: %DATE% %TIME% >> ${{ github.workspace }}\dist\VERSION.txt
         shell: cmd
 
