@@ -7,45 +7,69 @@ jobs:
   build-static:
     runs-on: windows-latest
     steps:
-      - name: Checkout dummy (not needed)
-        run: echo "No source checkout needed — vcpkg will fetch libheif"
+      - name: Checkout dummy
+        run: echo "No source needed — vcpkg handles everything"
 
-      - name: Clone vcpkg
+      - name: Clone and bootstrap vcpkg
         run: |
           git clone https://github.com/microsoft/vcpkg.git
           cd vcpkg
           .\bootstrap-vcpkg.bat
         shell: cmd
 
-      - name: Install libheif (static)
+      - name: Install libheif (static) — build only, we'll grab EXE manually
+        id: install
         run: |
           cd vcpkg
           .\vcpkg install libheif:x64-windows-static
         shell: cmd
 
-      - name: Create output directory
-        run: mkdir ${{ github.workspace }}\dist\bin
-        shell: cmd
-
-      - name: Copy static binaries
+      - name: Locate and copy static EXEs from build directory
         shell: pwsh
         run: |
-          $srcBin = "${{ github.workspace }}\vcpkg\installed\x64-windows-static\bin"
-          $dstBin = "${{ github.workspace }}\dist\bin"
+          # 构建输出路径（vcpkg 的构建树）
+          $buildRoot = "${{ github.workspace }}\vcpkg\buildtrees\libheif"
+          $exeDir = Get-ChildItem -Path $buildRoot -Filter "x64-windows-static-rel" -Recurse -Directory | Select-Object -First 1
 
-          Copy-Item "$srcBin\heif-enc.exe" -Destination $dstBin -Force
-          Copy-Item "$srcBin\heif-dec.exe" -Destination $dstBin -Force
+          if (-not $exeDir) {
+              throw "❌ Build directory not found! Looked in: $buildRoot"
+          }
 
-          Write-Host "✅ Copied static binaries: heif-enc.exe, heif-dec.exe"
+          $examplesDir = Join-Path $exeDir.FullName "examples"
+          if (-not (Test-Path $examplesDir)) {
+              throw "❌ examples directory not found in: $examplesDir"
+          }
 
-      - name: Verify files exist
+          # 创建输出目录
+          $distBin = "${{ github.workspace }}\dist\bin"
+          New-Item -ItemType Directory -Force -Path $distBin
+
+          # 复制 heif-enc.exe 和 heif-dec.exe
+          $encExe = Join-Path $examplesDir "heif-enc.exe"
+          $decExe = Join-Path $examplesDir "heif-dec.exe"
+
+          if (Test-Path $encExe) {
+              Copy-Item $encExe -Destination $distBin -Force
+              Write-Host "✅ Copied: heif-enc.exe"
+          } else {
+              throw "❌ heif-enc.exe not found in $examplesDir"
+          }
+
+          if (Test-Path $decExe) {
+              Copy-Item $decExe -Destination $distBin -Force
+              Write-Host "✅ Copied: heif-dec.exe"
+          } else {
+              throw "❌ heif-dec.exe not found in $examplesDir"
+          }
+
+      - name: Verify EXEs are static (optional)
         shell: pwsh
         run: |
-          $exe1 = "${{ github.workspace }}\dist\bin\heif-enc.exe"
-          $exe2 = "${{ github.workspace }}\dist\bin\heif-dec.exe"
-          if (-not (Test-Path $exe1)) { throw "heif-enc.exe not found!" }
-          if (-not (Test-Path $exe2)) { throw "heif-dec.exe not found!" }
-          Write-Host "✅ All binaries verified."
+          $exePath = "${{ github.workspace }}\dist\bin\heif-enc.exe"
+          if (Test-Path $exePath) {
+              Write-Host "🔍 Checking if $exePath is static (minimal DLL dependencies)..."
+              & "dumpbin.exe" /DEPENDENTS $exePath
+          }
 
       - name: Create VERSION file
         run: |
