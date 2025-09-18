@@ -25,7 +25,7 @@ jobs:
             mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-libde265
             mingw-w64-x86_64-x265
-            mingw-w64-x86_64-libaom
+            mingw-w64-x86_64-aom           # ✅ 修正：原 libaom → aom
             mingw-w64-x86_64-rav1e
             mingw-w64-x86_64-dav1d
             mingw-w64-x86_64-svt-av1
@@ -43,7 +43,7 @@ jobs:
       - name: Build with CMake
         working-directory: build
         run: |
-          cmake --build . --config Release -j $(nproc)
+          cmake --build . --config Release -j $(nproc 2>/dev/null || echo 2)
         shell: msys2 {0}
 
       - name: Install locally (optional, for headers/libs)
@@ -70,7 +70,7 @@ jobs:
 
           # 运行时依赖 DLL（来自 MSYS2）
           cp "${MINGW_PREFIX}"/bin/libde265*.dll ./dist/bin/ 2>/dev/null || echo "libde265 not needed or static"
-          cp "${MINGW_PREFIX}"/bin/libaom*.dll ./dist/bin/ 2>/dev/null || echo "libaom not needed or static"
+          cp "${MINGW_PREFIX}"/bin/libaom*.dll ./dist/bin/ 2>/dev/null || echo "libaom not needed or static"     # ✅ 文件名仍是 libaom-*.dll
           cp "${MINGW_PREFIX}"/bin/libx265*.dll ./dist/bin/ 2>/dev/null || echo "libx265 not needed or static"
           cp "${MINGW_PREFIX}"/bin/libdav1d*.dll ./dist/bin/ 2>/dev/null || echo "libdav1d not needed"
           cp "${MINGW_PREFIX}"/bin/librav1e*.dll ./dist/bin/ 2>/dev/null || echo "librav1e not needed"
