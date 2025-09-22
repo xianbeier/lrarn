@@ -1,4 +1,4 @@
-name: Build libheif for Windows
+name: 为 Windows 构建 libheif (完整构建包)
 
 on:
   workflow_dispatch:
@@ -7,24 +7,25 @@ jobs:
   build-static:
     runs-on: windows-latest
     steps:
-      - name: Checkout dummy
-        run: echo "No source needed — vcpkg handles everything"
+      - name: 检出虚拟仓库
+        run: echo "不需要源代码 — vcpkg 会处理所有事情"
 
-      - name: Clone and bootstrap vcpkg
+      - name: 克隆并初始化 vcpkg
         run: |
           git clone https://github.com/microsoft/vcpkg.git
           cd vcpkg
           .\bootstrap-vcpkg.bat
         shell: cmd
 
-      - name: Install libheif (static) — build only, we'll grab EXE manually
+      - name: 安装 libheif (静态版本) 并包含示例
         id: install
         run: |
           cd vcpkg
           .\vcpkg install libheif:x64-windows-static
+          .\vcpkg install libheif[examples]:x64-windows-static
         shell: cmd
 
-      - name: Locate and copy static EXEs from build directory
+      - name: 复制整个构建输出目录
         shell: pwsh
         run: |
           # 构建输出路径（vcpkg 的构建树）
@@ -32,54 +33,46 @@ jobs:
           $exeDir = Get-ChildItem -Path $buildRoot -Filter "x64-windows-static-rel" -Recurse -Directory | Select-Object -First 1
 
           if (-not $exeDir) {
-              throw "❌ Build directory not found! Looked in: $buildRoot"
-          }
-
-          $examplesDir = Join-Path $exeDir.FullName "examples"
-          if (-not (Test-Path $examplesDir)) {
-              throw "❌ examples directory not found in: $examplesDir"
+              throw "❌ 构建目录未找到！已查找位置: $buildRoot"
           }
 
           # 创建输出目录
-          $distBin = "${{ github.workspace }}\dist\bin"
-          New-Item -ItemType Directory -Force -Path $distBin
+          $distDir = "${{ github.workspace }}\dist"
+          New-Item -ItemType Directory -Force -Path $distDir
 
-          # 复制 heif-enc.exe 和 heif-dec.exe
-          $encExe = Join-Path $examplesDir "heif-enc.exe"
-          $decExe = Join-Path $examplesDir "heif-dec.exe"
+          # 复制整个构建目录
+          $buildOutputDir = Join-Path $distDir "build-output"
+          Copy-Item -Path $exeDir.FullName -Destination $buildOutputDir -Recurse -Force
+          Write-Host "✅ 已复制整个构建目录到: $buildOutputDir"
 
-          if (Test-Path $encExe) {
-              Copy-Item $encExe -Destination $distBin -Force
-              Write-Host "✅ Copied: heif-enc.exe"
-          } else {
-              throw "❌ heif-enc.exe not found in $examplesDir"
-          }
+          # 显示构建目录内容概览
+          Write-Host "📋 构建目录内容概览:"
+          Get-ChildItem -Path $buildOutputDir -Recurse | Where-Object { -not $_.PSIsContainer } | 
+            Group-Object Extension | 
+            Select-Object @{Name="文件类型"; Expression={$_.Name}}, Count | 
+            Format-Table -AutoSize
 
-          if (Test-Path $decExe) {
-              Copy-Item $decExe -Destination $distBin -Force
-              Write-Host "✅ Copied: heif-dec.exe"
-          } else {
-              throw "❌ heif-dec.exe not found in $examplesDir"
-          }
-
-      - name: Verify EXEs are static (optional)
-        shell: pwsh
+      - name: 创建版本信息文件
         run: |
-          $exePath = "${{ github.workspace }}\dist\bin\heif-enc.exe"
-          if (Test-Path $exePath) {
-              Write-Host "🔍 Checking if $exePath is static (minimal DLL dependencies)..."
-              & "dumpbin.exe" /DEPENDENTS $exePath
-          }
-
-      - name: Create VERSION file
-        run: |
-          echo libheif static build via vcpkg > ${{ github.workspace }}\dist\VERSION.txt
-          echo triplet: x64-windows-static >> ${{ github.workspace }}\dist\VERSION.txt
-          echo build date: %DATE% %TIME% >> ${{ github.workspace }}\dist\VERSION.txt
+          echo 通过 vcpkg 构建的 libheif 静态版本 > ${{ github.workspace }}\dist\VERSION.txt
+          echo 三元组: x64-windows-static >> ${{ github.workspace }}\dist\VERSION.txt
+          echo 构建日期: %DATE% %TIME% >> ${{ github.workspace }}\dist\VERSION.txt
+          echo 构建内容: 完整构建输出目录 >> ${{ github.workspace }}\dist\VERSION.txt
         shell: cmd
 
-      - name: Upload static artifact
+      - name: 显示构建产物大小
+        shell: pwsh
+        run: |
+          $distDir = "${{ github.workspace }}\dist"
+          $buildOutputDir = Join-Path $distDir "build-output"
+          
+          if (Test-Path $buildOutputDir) {
+            $size = [math]::Round((Get-ChildItem -Path $buildOutputDir -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 2)
+            Write-Host "📦 构建产物总大小: $size MB"
+          }
+
+      - name: 上传完整构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: libheif-static-windows-x64
+          name: libheif完整构建包-windows-x64
           path: ${{ github.workspace }}\dist\
