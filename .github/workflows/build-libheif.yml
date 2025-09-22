@@ -17,38 +17,77 @@ jobs:
           .\bootstrap-vcpkg.bat
         shell: cmd
 
-      - name: 安装 libheif (静态版本) 并包含示例
+      - name: 安装 libheif (静态版本)
         id: install
         run: |
           cd vcpkg
           .\vcpkg install libheif:x64-windows-static
-          .\vcpkg install libheif[examples]:x64-windows-static
         shell: cmd
 
-      - name: 复制整个构建输出目录
+      - name: 收集构建产物
         shell: pwsh
         run: |
-          # 构建输出路径（vcpkg 的构建树）
+          # 创建输出目录
+          $distDir = "${{ github.workspace }}\dist"
+          $buildOutputDir = Join-Path $distDir "build-output"
+          $includeDir = Join-Path $distDir "include"
+          $libDir = Join-Path $distDir "lib"
+          $binDir = Join-Path $distDir "bin"
+          
+          New-Item -ItemType Directory -Force -Path $distDir, $buildOutputDir, $includeDir, $libDir, $binDir
+
+          # 1. 复制构建树中的所有文件（用于调试和完整构建包）
           $buildRoot = "${{ github.workspace }}\vcpkg\buildtrees\libheif"
           $exeDir = Get-ChildItem -Path $buildRoot -Filter "x64-windows-static-rel" -Recurse -Directory | Select-Object -First 1
 
-          if (-not $exeDir) {
-              throw "❌ 构建目录未找到！已查找位置: $buildRoot"
+          if ($exeDir) {
+            Copy-Item -Path $exeDir.FullName -Destination $buildOutputDir -Recurse -Force
+            Write-Host "✅ 已复制构建目录到: $buildOutputDir"
+          } else {
+            Write-Host "⚠️ 未找到构建目录: $buildRoot"
           }
 
-          # 创建输出目录
-          $distDir = "${{ github.workspace }}\dist"
-          New-Item -ItemType Directory -Force -Path $distDir
+          # 2. 复制已安装的文件（头文件、库文件等）
+          $installedRoot = "${{ github.workspace }}\vcpkg\installed\x64-windows-static"
+          
+          # 复制头文件
+          $srcInclude = Join-Path $installedRoot "include"
+          if (Test-Path $srcInclude) {
+            Copy-Item -Path "$srcInclude\*" -Destination $includeDir -Recurse -Force
+            Write-Host "✅ 已复制头文件到: $includeDir"
+          }
+          
+          # 复制库文件
+          $srcLib = Join-Path $installedRoot "lib"
+          if (Test-Path $srcLib) {
+            Copy-Item -Path "$srcLib\*" -Destination $libDir -Recurse -Force
+            Write-Host "✅ 已复制库文件到: $libDir"
+          }
+          
+          # 复制工具和可执行文件（如果有）
+          $srcTools = Join-Path $installedRoot "tools"
+          if (Test-Path $srcTools) {
+            Copy-Item -Path "$srcTools\*" -Destination $binDir -Recurse -Force
+            Write-Host "✅ 已复制工具到: $binDir"
+          }
 
-          # 复制整个构建目录
-          $buildOutputDir = Join-Path $distDir "build-output"
-          Copy-Item -Path $exeDir.FullName -Destination $buildOutputDir -Recurse -Force
-          Write-Host "✅ 已复制整个构建目录到: $buildOutputDir"
+          # 3. 查找并复制任何可执行文件
+          if ($exeDir) {
+            $foundExes = Get-ChildItem -Path $exeDir.FullName -Filter "*.exe" -Recurse
+            if ($foundExes) {
+              foreach ($exe in $foundExes) {
+                Copy-Item $exe.FullName -Destination $binDir -Force
+                Write-Host "✅ 已复制可执行文件: $($exe.Name)"
+              }
+            } else {
+              Write-Host "⚠️ 未找到可执行文件"
+            }
+          }
 
-          # 显示构建目录内容概览
-          Write-Host "📋 构建目录内容概览:"
-          Get-ChildItem -Path $buildOutputDir -Recurse | Where-Object { -not $_.PSIsContainer } | 
-            Group-Object Extension | 
+          # 显示构建产物内容概览
+          Write-Host "📋 构建产物内容概览:"
+          Get-ChildItem -Path $distDir -Recurse | Where-Object { -not $_.PSIsContainer } | 
+            Group-Object { $_.Extension.ToLower() } | 
             Select-Object @{Name="文件类型"; Expression={$_.Name}}, Count | 
             Format-Table -AutoSize
 
@@ -57,17 +96,16 @@ jobs:
           echo 通过 vcpkg 构建的 libheif 静态版本 > ${{ github.workspace }}\dist\VERSION.txt
           echo 三元组: x64-windows-static >> ${{ github.workspace }}\dist\VERSION.txt
           echo 构建日期: %DATE% %TIME% >> ${{ github.workspace }}\dist\VERSION.txt
-          echo 构建内容: 完整构建输出目录 >> ${{ github.workspace }}\dist\VERSION.txt
+          echo 构建内容: 完整构建输出目录和已安装文件 >> ${{ github.workspace }}\dist\VERSION.txt
         shell: cmd
 
       - name: 显示构建产物大小
         shell: pwsh
         run: |
           $distDir = "${{ github.workspace }}\dist"
-          $buildOutputDir = Join-Path $distDir "build-output"
           
-          if (Test-Path $buildOutputDir) {
-            $size = [math]::Round((Get-ChildItem -Path $buildOutputDir -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 2)
+          if (Test-Path $distDir) {
+            $size = [math]::Round((Get-ChildItem -Path $distDir -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 2)
             Write-Host "📦 构建产物总大小: $size MB"
           }
 
