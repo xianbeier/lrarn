@@ -1,25 +1,30 @@
-# .github/workflows/build.yml
-name: Build RapidASR C
+name: Build RapidASR C++ (Windows EXE)
 
 on:
-  workflow_dispatch:  # 允许手动触发
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:  # 允许手动运行
 
 jobs:
-  build-windows:
+  build:
+    name: Build on Windows x64
     runs-on: windows-latest
 
     steps:
-    - name: Checkout RapidASR
+    - name: Checkout RapidASR Repository
       uses: actions/checkout@v4
       with:
         repository: RapidAI/RapidASR
         path: RapidASR
-        submodules: recursive  # 如果 webrtc 是子模块（目前看起来是本地目录）
+        submodules: recursive
 
-    - name: Download ONNX Runtime (Windows x64)
+    - name: Download ONNX Runtime (v1.17.1, Windows x64)
       working-directory: RapidASR/cpp_onnx
       run: |
+        Write-Host "Downloading ONNX Runtime..."
         curl -L https://github.com/microsoft/onnxruntime/releases/download/v1.17.1/onnxruntime-win-x64-1.17.1.zip -o onnxruntime.zip
+        Write-Host "Extracting..."
         7z x onnxruntime.zip -oonnxruntime
       shell: pwsh
 
@@ -29,21 +34,41 @@ jobs:
         mkdir build
         cd build
         cmake .. -DONNXRUNTIME_DIR="$env:GITHUB_WORKSPACE/RapidASR/cpp_onnx/onnxruntime" -G "Visual Studio 17 2022" -A x64
+      shell: pwsh
 
     - name: Build Release
       working-directory: RapidASR/cpp_onnx
       run: |
         cmake --build build --config Release --parallel
+      shell: pwsh
 
-    - name: Prepare Artifact
+    - name: Prepare Release Package
       working-directory: RapidASR/cpp_onnx
       run: |
+        # 创建输出目录
         mkdir release_bin
-        copy build\tester\Release\*.exe release_bin\
-        copy onnxruntime\lib\onnxruntime.dll release_bin\
 
-    - name: Upload EXE + DLL
+        # 复制生成的可执行文件（来自 tester）
+        $exeFiles = Get-ChildItem -Path build/tester/Release -Filter *.exe
+        if ($exeFiles.Count -eq 0) {
+          Write-Error "No .exe file found in build/tester/Release/"
+          exit 1
+        }
+        Copy-Item -Path build/tester/Release/*.exe -Destination release_bin/
+
+        # 复制 ONNX Runtime DLL（注意：在 onnxruntime/ 根目录，不在 lib/）
+        if (!(Test-Path onnxruntime/onnxruntime.dll)) {
+          Write-Error "onnxruntime.dll not found! Please check ONNX Runtime extraction."
+          exit 1
+        }
+        Copy-Item -Path onnxruntime/onnxruntime.dll -Destination release_bin/
+
+        Write-Host "Build package contents:"
+        Get-ChildItem release_bin
+      shell: pwsh
+
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: RapidASR-Windows-x64
+        name: RapidASR-Windows-x64-EXE
         path: RapidASR/cpp_onnx/release_bin/
