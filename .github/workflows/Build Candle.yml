@@ -1507,30 +1507,6 @@ jobs:
           Set-Content -Path $tsFile -Value $content -Encoding UTF8
           Write-Host "Created $tsFile with Chinese translations."
 
-      # 修改 CMakeLists.txt 第90行：添加 zh_CN 到 QT_LANGUAGES
-      - name: Patch CMakeLists.txt to include zh_CN
-        run: |
-          $lines = Get-Content CMakeLists.txt
-          $targetLineIndex = 89  # 第90行（PowerShell索引从0开始）
-          if ($lines.Count -le $targetLineIndex) {
-            Write-Error "CMakeLists.txt has fewer than 90 lines!"
-            exit 1
-          }
-          $line = $lines[$targetLineIndex]
-          if ($line -match '^\s*set\s*\(\s*QT_LANGUAGES\b') {
-            if ($line -notlike "*zh_CN*") {
-              # 在右括号前插入 zh_CN
-              $newLine = $line -replace '\s*\)$', ' zh_CN)'
-              $lines[$targetLineIndex] = $newLine
-              Set-Content CMakeLists.txt -Value $lines
-              Write-Host "Updated QT_LANGUAGES line: $newLine"
-            } else {
-              Write-Host "zh_CN already present in QT_LANGUAGES."
-            }
-          } else {
-            Write-Error "Line 90 is not the expected QT_LANGUAGES set command!"
-            exit 1
-          }
 
       # 缓存 vcpkg
       - name: Download vcpkg cache
