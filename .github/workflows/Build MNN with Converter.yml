@@ -12,7 +12,12 @@ jobs:
           repository: alibaba/MNN 
           path: MNN 
           ref: master 
-       
+
+      - name: Install Ninja
+        run: |
+          choco install ninja -y
+          refreshenv
+      
       - name: Build MNN 
         working-directory: MNN 
         run: | 
