@@ -17,7 +17,7 @@ jobs:
         working-directory: MNN 
         run: | 
           mkdir build && cd build 
-          cmake .. -DLLM_SUPPORT_VISION=ON -DMNN_BUILD_OPENCV=ON -DMNN_IMGCODECS=ON -DLLM_SUPPORT_AUDIO=ON -DMNN_BUILD_AUDIO=ON -DBUILD_MLS=true -DMNN_LOW_MEMORY=true -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BUILD_LLM=true -DMNN_SUPPORT_TRANSFORMER_FUSE=true
+          cmake .. -DLLM_SUPPORT_VISION=ON -DMNN_BUILD_OPENCV=ON -DMNN_IMGCODECS=ON -DLLM_SUPPORT_AUDIO=ON -DMNN_BUILD_AUDIO=ON -DBUILD_MLS=true -DMNN_LOW_MEMORY=true -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BUILD_LLM=true -DMNN_SUPPORT_TRANSFORMER_FUSE=true -DMNN_BUILD_CONVERTER=ON -DMNN_BUILD_TORCH=ON
           cmake --build . --config Release -j
       - name: Upload artifacts 
         uses: actions/upload-artifact@v4 
