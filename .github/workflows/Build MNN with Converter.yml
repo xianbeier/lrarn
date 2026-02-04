@@ -13,28 +13,13 @@ jobs:
           path: MNN 
           ref: master 
 
-      - name: Install Ninja
-        run: |
-          choco install ninja -y
-          refreshenv
-      
       - name: Build MNN 
         working-directory: MNN 
-        shell: pwsh  # 明确指定使用PowerShell
         run: | 
-          mkdir build; cd build
-          cmake .. -G "Ninja" `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DMNN_BUILD_LLM=ON `
-            -DMNN_BUILD_LLM_OMNI=ON `
-            -DMNN_CPU_WEIGHT_DEQUANT_GEMM=ON `
-            -DBUILD_MLS=ON `
-            -DMNN_SEP_BUILD=0 `
-            -DMNN_BUILD_CONVERTER=ON `
-            -DMNN_BUILD_SHARED_LIBS=OFF `
-            -DMNN_WIN_RUNTIME_MT=ON
-          cmake --build . --config Release --parallel
-      
+          mkdir build && cd build
+          cmake .. -DMNN_BUILD_LLM=ON -DMNN_BUILD_LLM_OMNI=ON -DMNN_CPU_WEIGHT_DEQUANT_GEMM=ON -DBUILD_MLS=ON -DMNN_SEP_BUILD=0 -DMNN_BUILD_CONVERTER=ON -DMNN_BUILD_SHARED_LIBS=OFF -DMNN_WIN_RUNTIME_MT=ON -DCMAKE_CXX_FLAGS="/EHsc"
+          cmake --build . --config Release -j
+          
       - name: Upload artifacts 
         uses: actions/upload-artifact@v4 
         with: 
