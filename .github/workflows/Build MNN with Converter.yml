@@ -1,0 +1,83 @@
+name: Build MNN with Converter (Windows, No TorchScript)
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout MNN
+        uses: actions/checkout@v4
+        with:
+          repository: alibaba/MNN
+          path: MNN
+          ref: master
+
+      - name: Install Ninja
+        run: |
+          choco install ninja -y
+          refreshenv
+
+      - name: Generate Schema Files (MANDATORY for Windows)
+        working-directory: MNN
+        shell: pwsh
+        run: |
+          # 绕过 PowerShell 执行策略限制
+          Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
+          .\schema\generate.ps1
+
+      - name: Build MNN with Converter
+        working-directory: MNN
+        shell: pwsh
+        run: |
+          mkdir build; cd build
+          cmake .. `
+            -G "Ninja" `
+            -DCMAKE_BUILD_TYPE=Release `
+            # === 转换工具必需配置（关键！）===
+            -DMNN_BUILD_CONVERTER=ON `
+            -DMNN_BUILD_SHARED_LIBS=OFF `    # 静态库（转换工具必需）
+            -DMNN_WIN_RUNTIME_MT=ON `        # /MT 静态运行时（转换工具必需）
+            -DMNN_BUILD_PROTOBUFFER=ON `     # 内置 Protobuf，避免外部依赖
+            # === 关闭 TorchScript（按需求）===
+            -DMNN_BUILD_TORCH=OFF `
+            # === 其他功能选项 ===
+            -DLLM_SUPPORT_VISION=ON `
+            -DMNN_BUILD_OPENCV=ON `
+            -DMNN_IMGCODECS=ON `
+            -DLLM_SUPPORT_AUDIO=ON `
+            -DMNN_BUILD_AUDIO=ON `
+            -DBUILD_MLS=true `
+            -DMNN_LOW_MEMORY=true `
+            -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true `
+            -DMNN_BUILD_LLM=true `
+            -DMNN_SUPPORT_TRANSFORMER_FUSE=true
+          ninja -j 4  # 限制并发避免内存溢出
+
+      - name: Verify Build Success
+        working-directory: MNN/build
+        shell: pwsh
+        run: |
+          if (Test-Path "MNNConvert.exe") {
+            Write-Host "✅ MNNConvert built successfully!" -ForegroundColor Green
+            .\MNNConvert.exe -v
+          } else {
+            Write-Error "❌ MNNConvert.exe not found!"
+            exit 1
+          }
+          if (Test-Path "MNN.lib") {
+            Write-Host "✅ MNN static library built successfully!" -ForegroundColor Green
+          } else {
+            Write-Error "❌ MNN.lib not found!"
+            exit 1
+          }
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mnn-windows-release
+          path: |
+            MNN/build/MNN.lib
+            MNN/build/MNNConvert.exe
+            MNN/build/MNN.dll      # 如果需要动态库可保留（但转换工具用静态库）
+            MNN/build/*.exe
