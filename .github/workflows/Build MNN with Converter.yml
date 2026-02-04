@@ -35,7 +35,7 @@ jobs:
             -G "Ninja" `
             -DCMAKE_BUILD_TYPE=Release `
             # === 转换工具必需配置（关键！）===
-            -DMNN_BUILD_CONVERTER=ON `
+            -DMNN_BUILD_CONVERTER=true `
             -DMNN_BUILD_SHARED_LIBS=OFF `    # 静态库（转换工具必需）
             -DMNN_WIN_RUNTIME_MT=ON `        # /MT 静态运行时（转换工具必需）
             -DMNN_BUILD_PROTOBUFFER=ON `     # 内置 Protobuf，避免外部依赖
