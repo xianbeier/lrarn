@@ -17,7 +17,7 @@ jobs:
         working-directory: MNN 
         run: | 
           mkdir build && cd build 
-          cmake .. -DMNN_BUILD_DIFFUSION=ON -DMNN_IMGCODECS=ON -DMNN_BUILD_LLM=ON -DMNN_BUILD_LLM_OMNI=ON -DMNN_CPU_WEIGHT_DEQUANT_GEMM=ON -DBUILD_MLS=ON -DMNN_SEP_BUILD=0
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DMNN_BUILD_DIFFUSION=ON -DMNN_IMGCODECS=ON -DMNN_BUILD_LLM=ON -DMNN_BUILD_LLM_OMNI=ON -DMNN_CPU_WEIGHT_DEQUANT_GEMM=ON -DBUILD_MLS=ON -DMNN_SEP_BUILD=0
           cmake --build . --config Release -j
       - name: Upload artifacts 
         uses: actions/upload-artifact@v4 
