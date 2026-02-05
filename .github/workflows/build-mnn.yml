@@ -1,4 +1,4 @@
-name: Build MNN 
+name: Build MNN LLM
 on: 
   workflow_dispatch: 
 
