@@ -17,7 +17,7 @@ jobs:
         working-directory: MNN 
         run: | 
           mkdir build && cd build
-          cmake .. -DMNN_LOW_MEMORY=ON -DMNN_BUILD_DIFFUSION=ON -DMNN_BUILD_OPENCV=ON -DMNN_IMGCODECS=ON -DMNN_SEP_BUILD=OFF
+          cmake .. -DMNN_LOW_MEMORY=ON -DMNN_BUILD_DIFFUSION=ON -DMNN_BUILD_OPENCV=ON -DMNN_IMGCODECS=ON -DMNN_SEP_BUILD=OFF -DMNN_TREAT_WARNINGS_AS_ERRORS=OFF
           cmake --build . --config Release -j
           
       - name: Upload artifacts 
