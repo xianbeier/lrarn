@@ -1,4 +1,4 @@
-name: 为 Windows 构建 libheif (完整构建包)
+name: Build libheif
 
 on:
   workflow_dispatch:
