@@ -5,23 +5,51 @@ on:
 jobs: 
   build: 
     runs-on: windows-latest 
-    steps: 
-      - name: Checkout MNN 
-        uses: actions/checkout@v4 
-        with: 
-          repository: alibaba/MNN 
-          path: MNN 
-          ref: master 
+    steps:
+      - name: Checkout MNN
+        uses: actions/checkout@v4
+        with:
+          repository: alibaba/MNN
+          path: MNN
+          ref: master
 
-      - name: Build MNN 
-        working-directory: MNN 
-        run: | 
-          mkdir build && cd build
-          cmake .. -DMNN_LOW_MEMORY=ON -DMNN_BUILD_DIFFUSION=ON -DMNN_BUILD_OPENCV=ON -DMNN_IMGCODECS=ON -DMNN_SEP_BUILD=OFF -DMNN_TREAT_WARNINGS_AS_ERRORS=OFF
-          cmake --build . --config Release -j
-          
-      - name: Upload artifacts 
-        uses: actions/upload-artifact@v4 
-        with: 
-          name: mnn-build 
+      - name: Install Ninja (for faster builds)
+        run: |
+          choco install ninja -y
+        shell: pwsh
+
+      - name: Set up vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          .\vcpkg\bootstrap-vcpkg.bat
+        shell: pwsh
+
+      - name: Install OpenCV via vcpkg
+        run: |
+          .\vcpkg\vcpkg install opencv[contrib,nonfree]:x64-windows --recurse
+        shell: pwsh
+
+      - name: Build MNN with Diffusion and OpenCV support
+        working-directory: MNN
+        run: |
+          mkdir build
+          cd build
+          cmake .. `
+            -G "Ninja" `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DMNN_LOW_MEMORY=ON `
+            -DMNN_BUILD_DIFFUSION=ON `
+            -DMNN_BUILD_OPENCV=ON `
+            -DMNN_IMGCODECS=ON `
+            -DMNN_SEP_BUILD=OFF `
+            -DMNN_TREAT_WARNINGS_AS_ERRORS=OFF
+          cmake --build . --config Release -j 4
+        shell: pwsh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mnn-diffusion-win-x64
           path: MNN/build/Release
