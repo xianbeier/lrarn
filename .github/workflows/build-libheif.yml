@@ -14,14 +14,33 @@ jobs:
           repository: strukturag/libheif
           path: libheif
           ref: master
-          
+ 
+      - name: Setup vcpkg
+        working-directory: .
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git
+          cd vcpkg
+          .\bootstrap-vcpkg.bat
+          .\vcpkg integrate install
+ 
+      - name: Install dependencies (x64)
+        working-directory: vcpkg
+        run: |
+          .\vcpkg install aom:x64-windows
+          .\vcpkg install dav1d:x64-windows
+          .\vcpkg install libde265:x64-windows
+          .\vcpkg install x265:x64-windows
+          .\vcpkg install libjpeg-turbo:x64-windows
+          .\vcpkg install libpng:x64-windows
+ 
       - name: Build libheif with preset
         working-directory: libheif
         run: |
           mkdir build
           cd build
-          cmake --preset=release .. 
-          make
+          cmake --preset=release `
+            -DCMAKE_TOOLCHAIN_FILE="$($env:GITHUB_WORKSPACE)\vcpkg\scripts\buildsystems\vcpkg.cmake"
+          cmake --build . --config Release -j
  
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
