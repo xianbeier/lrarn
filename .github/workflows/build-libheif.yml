@@ -38,8 +38,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake --preset=release `
-            -DCMAKE_TOOLCHAIN_FILE="$($env:GITHUB_WORKSPACE)\vcpkg\scripts\buildsystems\vcpkg.cmake"
+          cmake .. --preset=release
           cmake --build . --config Release -j
  
       - name: Upload artifacts
