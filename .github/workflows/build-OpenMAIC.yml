@@ -1,0 +1,32 @@
+name: Build OpenMAIC and Download Dist
+
+on:
+  workflow_dispatch: # 允许手动运行构建任务
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'  # 使用与项目兼容的 Node.js 版本
+
+      - name: Clone OpenMAIC repository
+        run: |
+          git clone https://github.com/THU-MAIC/OpenMAIC.git 
+          cd OpenMAIC
+
+      - name: Install dependencies
+        working-directory: OpenMAIC
+        run: npm install
+
+      - name: Build project
+        working-directory: OpenMAIC
+        run: npm run build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenMAIC-dist
+          path: OpenMAIC/dist/
