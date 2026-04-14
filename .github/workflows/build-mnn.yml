@@ -22,5 +22,5 @@ jobs:
       - name: Upload artifacts 
         uses: actions/upload-artifact@v4 
         with: 
-          name: mnn-build 
+          name: mnn-build-${{ github.run_id }}
           path: MNN/build/Release
