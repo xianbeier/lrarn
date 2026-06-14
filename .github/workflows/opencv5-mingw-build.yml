@@ -132,17 +132,23 @@ jobs:
           if (Test-Path $f) {
             $c = Get-Content $f -Raw -Encoding UTF8
             if ($c.Contains('posix_memalign') -and -not $c.Contains('__MINGW32__')) {
-              # 精确匹配: int err = posix_memalign(&ptr, ThreadedBufAlignment, size);
-              $mingw = "#if defined(__MINGW32__) || defined(__MINGW64__)" + $nl
-              $mingw += "    ptr = _aligned_malloc(size, ThreadedBufAlignment);" + $nl
-              $mingw += "    int err = (ptr == nullptr) ? 12 : 0;  // 12 = ENOMEM" + $nl
-              $mingw += "#else" + $nl
-              $mingw += "    int err = posix_memalign(&ptr, ThreadedBufAlignment, size);" + $nl
-              $mingw += "#endif"
-              $n = $c -replace 'int\s+err\s*=\s*posix_memalign\s*\(\s*&ptr\s*,\s*ThreadedBufAlignment\s*,\s*size\s*\)\s*;', $mingw
+              # 先构建替换字符串, 再用变量传给 -replace (避免参数数量问题)
+              $mingwA = "#if defined(__MINGW32__) || defined(__MINGW64__)" + $nl
+              $mingwA += "    ptr = _aligned_malloc(size, ThreadedBufAlignment);" + $nl
+              $mingwA += "    int err = (ptr == nullptr) ? 12 : 0;  // 12 = ENOMEM" + $nl
+              $mingwA += "#else" + $nl
+              $mingwA += "    int err = posix_memalign(&ptr, ThreadedBufAlignment, size);" + $nl
+              $mingwA += "#endif"
+              $n = $c -replace 'int\s+err\s*=\s*posix_memalign\s*\(\s*&ptr\s*,\s*ThreadedBufAlignment\s*,\s*size\s*\)\s*;', $mingwA
               if ($n -eq $c) {
                 # 宽松匹配
-                $n = $c -replace '(\s+)(int\s+err\s*=\s*posix_memalign\s*\([^;]+\);)', ('$1#if defined(__MINGW32__) || defined(__MINGW64__)' + $nl + '$1    ptr = _aligned_malloc(size, ThreadedBufAlignment);' + $nl + '$1    int err = (ptr == nullptr) ? 12 : 0;' + $nl + '$1#else' + $nl + '$1$2' + $nl + '$1#endif')
+                $mingwB = '$1#if defined(__MINGW32__) || defined(__MINGW64__)'
+                $mingwB += $nl + '$1    ptr = _aligned_malloc(size, ThreadedBufAlignment);'
+                $mingwB += $nl + '$1    int err = (ptr == nullptr) ? 12 : 0;'
+                $mingwB += $nl + '$1#else'
+                $mingwB += $nl + '$1$2'
+                $mingwB += $nl + '$1#endif'
+                $n = $c -replace '(\s+)(int\s+err\s*=\s*posix_memalign\s*\([^;]+\);)', $mingwB
               }
               if (-not $n.Contains('<malloc.h>')) {
                 $n = "#include <malloc.h>" + $nl + $n
@@ -180,9 +186,11 @@ jobs:
           if (Test-Path $f) {
             $c = Get-Content $f -Raw -Encoding UTF8
             if ($c.Contains('check_symbol_exists(posix_memalign') -and -not $c.Contains('NOT MINGW')) {
-              $n = $c -replace 'check_symbol_exists\(posix_memalign\s+stdlib\.h\s+HAVE_POSIX_MEMALIGN\)', 'if(NOT MINGW)' + $nl + '  check_symbol_exists(posix_memalign stdlib.h HAVE_POSIX_MEMALIGN)' + $nl + 'endif()'
+              $replC1 = 'if(NOT MINGW)' + $nl + '  check_symbol_exists(posix_memalign stdlib.h HAVE_POSIX_MEMALIGN)' + $nl + 'endif()'
+              $n = $c -replace 'check_symbol_exists\(posix_memalign\s+stdlib\.h\s+HAVE_POSIX_MEMALIGN\)', $replC1
               # 同样处理 aligned_alloc (MinGW 可能也有问题)
-              $n = $n -replace 'check_symbol_exists\(aligned_alloc\s+stdlib\.h\s+HAVE_ALIGNED_ALLOC\)', 'if(NOT MINGW)' + $nl + '  check_symbol_exists(aligned_alloc stdlib.h HAVE_ALIGNED_ALLOC)' + $nl + 'endif()'
+              $replC2 = 'if(NOT MINGW)' + $nl + '  check_symbol_exists(aligned_alloc stdlib.h HAVE_ALIGNED_ALLOC)' + $nl + 'endif()'
+              $n = $n -replace 'check_symbol_exists\(aligned_alloc\s+stdlib\.h\s+HAVE_ALIGNED_ALLOC\)', $replC2
               Set-Content $f $n -NoNewline -Encoding UTF8
               $patched += "C: zlib-ng CMakeLists.txt posix_memalign/aligned_alloc MINGW guard"
             }
@@ -197,10 +205,12 @@ jobs:
           if (Test-Path $f) {
             $c = Get-Content $f -Raw -Encoding UTF8
             if ($c.Contains('check_symbol_exists(posix_memalign') -and -not $c.Contains('NOT MINGW')) {
-              $n = $c -replace '(set\(CMAKE_REQUIRED_DEFINITIONS -D_POSIX_C_SOURCE=200112L\)\r?\n\s*check_symbol_exists\(posix_memalign\s+stdlib\.h\s+OPJ_HAVE_POSIX_MEMALIGN\))', 'if(NOT MINGW)' + $nl + '$1' + $nl + 'endif()'
+              $replD1 = 'if(NOT MINGW)' + $nl + '$1' + $nl + 'endif()'
+              $n = $c -replace '(set\(CMAKE_REQUIRED_DEFINITIONS -D_POSIX_C_SOURCE=200112L\)\r?\n\s*check_symbol_exists\(posix_memalign\s+stdlib\.h\s+OPJ_HAVE_POSIX_MEMALIGN\))', $replD1
               if ($n -eq $c) {
                 # 备用: 简单替换
-                $n = $c -replace 'check_symbol_exists\(posix_memalign\s+stdlib\.h\s+OPJ_HAVE_POSIX_MEMALIGN\)', 'if(NOT MINGW)' + $nl + '  check_symbol_exists(posix_memalign stdlib.h OPJ_HAVE_POSIX_MEMALIGN)' + $nl + 'endif()'
+                $replD2 = 'if(NOT MINGW)' + $nl + '  check_symbol_exists(posix_memalign stdlib.h OPJ_HAVE_POSIX_MEMALIGN)' + $nl + 'endif()'
+                $n = $c -replace 'check_symbol_exists\(posix_memalign\s+stdlib\.h\s+OPJ_HAVE_POSIX_MEMALIGN\)', $replD2
               }
               Set-Content $f $n -NoNewline -Encoding UTF8
               $patched += "D: openjpeg CMakeLists.txt posix_memalign MINGW guard"
