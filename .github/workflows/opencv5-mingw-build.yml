@@ -1,0 +1,568 @@
+# ============================================================
+# Auto Build OpenCV 5 MinGW Release
+#
+# 功能:
+#   - 自动检测 OpenCV 5.x 最新 tag
+#   - 在 Windows + MinGW 环境下编译 OpenCV 5 (含 contrib)
+#   - 自动补丁 posix_memalign 等 MinGW 兼容性问题
+#   - 打包为 zip 并发布到 GitHub Release
+#
+# OpenCV 5 关键变化:
+#   - 新增 geometry 模块 (minAreaRect, convexHull, getPerspectiveTransform 等)
+#   - 移除 calib3d 中的部分函数到 geometry
+#   - 要求 C++17
+#   - DNN 引擎重构 (NEW / CLASSIC)
+#
+# 用法:
+#   - 手动触发: Actions 页面点击 "Run workflow"
+#   - 定时触发: 取消 schedule 注释即可
+# ============================================================
+
+name: Auto Build OpenCV 5 MinGW Release
+
+on:
+  # schedule:
+  #   - cron: "0 20 * * *"   # 每天 4:00 (北京时间) 检查更新
+  workflow_dispatch:           # 可手动触发
+    inputs:
+      opencv_tag:
+        description: 'OpenCV tag to build (e.g. 5.0.0). Leave empty for latest.'
+        required: false
+        default: ''
+      build_contrib:
+        description: 'Include opencv_contrib modules'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      build_world:
+        description: 'Build as opencv_world (single combined library)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      build_shared:
+        description: 'Build shared libs (DLL) or static libs'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  check-and-build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      # ============================================================
+      # 1. 检出本仓库
+      # ============================================================
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ============================================================
+      # 2. 获取最新 OpenCV 5.x 版本 tag
+      # ============================================================
+      - name: Get latest OpenCV 5.x version tag
+        id: get_tag
+        shell: pwsh
+        run: |
+          if ("${{ inputs.opencv_tag }}" -ne "") {
+            $tag = "${{ inputs.opencv_tag }}"
+            Write-Host "Using manually specified tag: $tag"
+          } else {
+            # 获取所有 release tags, 筛选 5.x 版本
+            $releases = Invoke-RestMethod "https://api.github.com/repos/opencv/opencv/releases?per_page=30"
+            $v5_tags = $releases | Where-Object { $_.tag_name -match '^5\.' } | Select-Object -ExpandProperty tag_name
+
+            if ($v5_tags.Count -eq 0) {
+              # 如果没有正式 release, 尝试获取 5.x 分支的最新 tag
+              Write-Host "No OpenCV 5.x release found, checking tags..."
+              $tags = Invoke-RestMethod "https://api.github.com/repos/opencv/opencv/tags?per_page=50"
+              $v5_tags = $tags | Where-Object { $_.name -match '^5\.' } | Select-Object -ExpandProperty name
+            }
+
+            if ($v5_tags.Count -eq 0) {
+              # 回退: 使用 5.x 分支的 HEAD
+              Write-Host "No OpenCV 5.x tag found, will use 5.x branch HEAD"
+              $tag = "5.x-head"
+            } else {
+              $tag = $v5_tags[0]
+            }
+            Write-Host "Latest OpenCV 5.x tag: $tag"
+          }
+
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+
+          # 生成显示版本号 (去掉 -head 后缀用于文件名)
+          $display = $tag -replace '-head$', ''
+          if ($display -eq '') { $display = '5.x' }
+          echo "display=$display" >> $env:GITHUB_OUTPUT
+
+      # ============================================================
+      # 3. 检查 Release 是否已存在
+      # ============================================================
+      - name: Check if release already exists
+        id: check_release
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.get_tag.outputs.tag }}"
+          try {
+            $releases = Invoke-RestMethod "https://api.github.com/repos/${{ github.repository }}/releases"
+            $exists = $releases | Where-Object { $_.tag_name -eq "opencv-mingw-$tag" }
+            if ($exists) {
+              Write-Host "Release opencv-mingw-$tag already exists. Skipping build."
+              echo "skip=true" >> $env:GITHUB_OUTPUT
+            } else {
+              Write-Host "New build needed for $tag."
+              echo "skip=false" >> $env:GITHUB_OUTPUT
+            }
+          } catch {
+            Write-Host "Could not check releases, proceeding with build."
+            echo "skip=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Stop if release exists
+        if: steps.check_release.outputs.skip == 'true'
+        run: echo "No new version to build."
+
+      # ============================================================
+      # 4. 安装 MinGW 和 CMake
+      # ============================================================
+      - name: Install MinGW and CMake
+        if: steps.check_release.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          choco install mingw -y --no-progress
+          choco install cmake --installargs 'ADD_CMAKE_TO_PATH=1' -y --no-progress
+          echo "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          g++ --version
+          cmake --version
+          mingw32-make --version
+
+      # ============================================================
+      # 5. 下载 OpenCV 5 源码
+      # ============================================================
+      - name: Download OpenCV 5 source
+        if: steps.check_release.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.get_tag.outputs.tag }}"
+          Write-Host "Downloading OpenCV tag: $tag"
+
+          if ($tag -eq "5.x-head") {
+            git clone --depth=1 --branch 5.x https://github.com/opencv/opencv.git
+          } else {
+            git clone --depth=1 --branch $tag https://github.com/opencv/opencv.git
+          }
+
+          # 下载 opencv_contrib (与主仓库同分支)
+          if ("${{ inputs.build_contrib }}" -eq "true") {
+            Write-Host "Downloading opencv_contrib..."
+            if ($tag -eq "5.x-head") {
+              git clone --depth=1 --branch 5.x https://github.com/opencv/opencv_contrib.git
+            } else {
+              git clone --depth=1 --branch $tag https://github.com/opencv/opencv_contrib.git
+            }
+          }
+
+      # ============================================================
+      # 6. 补丁: 修复 MinGW 兼容性问题
+      #     OpenCV 5 中多处使用 posix_memalign, MinGW 不支持
+      # ============================================================
+      - name: Patch MinGW compatibility issues
+        if: steps.check_release.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          Write-Host "===== Patching MinGW compatibility ====="
+
+          # ---- 补丁 1: core/alloc.cpp ----
+          # modules/core/src/alloc.cpp 使用 posix_memalign
+          # MinGW 下应使用 _aligned_malloc
+          $allocFile = "opencv/modules/core/src/alloc.cpp"
+          if (Test-Path $allocFile) {
+            $content = Get-Content $allocFile -Raw -Encoding UTF8
+            if ($content -match 'posix_memalign' -and -not $content.Contains('__MINGW32__')) {
+              # 在 posix_memalign 检查前添加 MinGW 守卫
+              $patch = @"
+          #if defined(__MINGW32__) || defined(__MINGW64__)
+              // MinGW: use _aligned_malloc instead of posix_memalign
+              #include <malloc.h>
+              #define HAVE_POSIX_MEMALIGN 0
+              static int mingw_aligned_alloc(void** ptr, size_t alignment, size_t size) {
+                  *ptr = _aligned_malloc(size, alignment);
+                  return (*ptr == nullptr) ? 12 : 0;
+              }
+              #define posix_memalign(ptr, align, size) mingw_aligned_alloc(ptr, align, size)
+          #endif
+"@
+              # 在第一个 #include 之前插入
+              $newContent = $content -replace '(#include)', "$patch`n`$1"
+              if ($newContent -ne $content) {
+                Set-Content -Path $allocFile -Value $newContent -NoNewline -Encoding UTF8
+                Write-Host "  [OK] Patched $allocFile"
+              }
+            }
+          }
+
+          # ---- 补丁 2: OpenEXR ImfSystemSpecific.h ----
+          $exrFile = "opencv/3rdparty/openexr/IlmImf/ImfSystemSpecific.h"
+          if (Test-Path $exrFile) {
+            $content = Get-Content $exrFile -Raw -Encoding UTF8
+            if ($content -match 'posix_memalign' -and -not $content.Contains('__MINGW32__')) {
+              # 在 posix_memalign 分支添加 __MINGW32__ 守卫
+              $newContent = $content -replace '(#else\s*//\s*GNUC.*\n)(\s*int\s+err\s*=\s*posix_memalign)', "`$1#if defined(__MINGW32__) || defined(__MINGW64__)`n            ptr = _aligned_malloc(size, alignment);`n            int err = (ptr == nullptr) ? 12 : 0;`n          #else`n$2"
+              if ($newContent -ne $content) {
+                # 在文件末尾的 #endif 之前补上 #endif
+                $newContent = $newContent -replace '(#endif\s*//\s*_WIN32)', "#endif // __MINGW32__`n          $1"
+                Set-Content -Path $exrFile -Value $newContent -NoNewline -Encoding UTF8
+                Write-Host "  [OK] Patched $exrFile"
+              }
+            }
+          }
+
+          # ---- 补丁 3: zlib-ng zutil_p.h ----
+          $zlibFile = "opencv/3rdparty/zlib-ng/zutil_p.h"
+          if (Test-Path $zlibFile) {
+            $content = Get-Content $zlibFile -Raw -Encoding UTF8
+            if ($content -match 'posix_memalign' -and -not $content.Contains('__MINGW32__')) {
+              $newContent = $content -replace '(#ifdef _WIN32)', "#if defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__)"
+              if ($newContent -ne $content) {
+                Set-Content -Path $zlibFile -Value $newContent -NoNewline -Encoding UTF8
+                Write-Host "  [OK] Patched $zlibFile"
+              }
+            }
+          }
+
+          # ---- 补丁 4: openjpeg opj_malloc.c ----
+          $opjFile = "opencv/3rdparty/openjpeg/openjp2/opj_malloc.c"
+          if (Test-Path $opjFile) {
+            $content = Get-Content $opjFile -Raw -Encoding UTF8
+            if ($content -match 'posix_memalign' -and -not $content.Contains('__MINGW32__')) {
+              $newContent = $content -replace '(#ifdef _WIN32)', "#if defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__)"
+              if ($newContent -ne $content) {
+                Set-Content -Path $opjFile -Value $newContent -NoNewline -Encoding UTF8
+                Write-Host "  [OK] Patched $opjFile"
+              }
+            }
+          }
+
+          # ---- 补丁 5: OPENCV_ENABLE_MEMALIGN 关闭 (最安全的兜底) ----
+          Write-Host "  [INFO] Will disable OPENCV_ENABLE_MEMALIGN in CMake to avoid posix_memalign entirely"
+
+          # ---- 补丁 6: gapi accelerators (if present) ----
+          $gapiFile = "opencv/modules/gapi/src/streaming/onevpl/accelerators/accel_policy_cpu.cpp"
+          if (Test-Path $gapiFile) {
+            $content = Get-Content $gapiFile -Raw -Encoding UTF8
+            if ($content -match 'posix_memalign' -and -not $content.Contains('__MINGW32__')) {
+              $newContent = $content -replace '(#else\s*//\s*!_WIN32)(.*?posix_memalign)', "#if defined(__MINGW32__) || defined(__MINGW64__)`n            ptr = _aligned_malloc(size, 64);`n            int err = (ptr == nullptr) ? 12 : 0;`n          #else`n$2"
+              if ($newContent -ne $content) {
+                Set-Content -Path $gapiFile -Value $newContent -NoNewline -Encoding UTF8
+                Write-Host "  [OK] Patched $gapiFile"
+              }
+            }
+          }
+
+          Write-Host "===== MinGW patching complete ====="
+
+      # ============================================================
+      # 7. 配置 OpenCV 5 (CMake + MinGW)
+      # ============================================================
+      - name: Configure OpenCV 5 (CMake + MinGW)
+        if: steps.check_release.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          mkdir build_opencv
+          cd build_opencv
+
+          # 构建 contrib 参数
+          $contribFlag = ""
+          if ("${{ inputs.build_contrib }}" -eq "true" -and (Test-Path "../opencv_contrib/modules")) {
+            $contribFlag = "-DOPENCV_EXTRA_MODULES_PATH=../opencv_contrib/modules"
+            Write-Host "Including opencv_contrib modules"
+          }
+
+          # 构建 world 参数
+          $worldFlag = ""
+          if ("${{ inputs.build_world }}" -eq "true") {
+            $worldFlag = "-DBUILD_opencv_world=ON"
+            Write-Host "Building opencv_world (single combined library)"
+          }
+
+          # 构建 shared/static 参数
+          $sharedFlag = if ("${{ inputs.build_shared }}" -eq "true") { "ON" } else { "OFF" }
+
+          Write-Host ""
+          Write-Host "===== OpenCV 5 MinGW CMake Configuration ====="
+          Write-Host "  Build type:     Release"
+          Write-Host "  Shared libs:    $sharedFlag"
+          Write-Host "  opencv_world:   ${{ inputs.build_world }}"
+          Write-Host "  opencv_contrib: ${{ inputs.build_contrib }}"
+          Write-Host "==============================================="
+          Write-Host ""
+
+          cmake -G "MinGW Makefiles" `
+                -DCMAKE_BUILD_TYPE=Release `
+                -DCMAKE_INSTALL_PREFIX=install `
+                -DCMAKE_CXX_STANDARD=17 `
+                -DBUILD_SHARED_LIBS=$sharedFlag `
+                $worldFlag `
+                $contribFlag `
+                -DBUILD_EXAMPLES=OFF `
+                -DBUILD_TESTS=OFF `
+                -DBUILD_PERF_TESTS=OFF `
+                -DBUILD_DOCS=OFF `
+                -DBUILD_JAVA=OFF `
+                -DBUILD_PYTHON=OFF `
+                -DBUILD_ISA=OFF `
+                -DCPU_DISPATCH="" `
+                -DOPENCV_ENABLE_MEMALIGN=OFF `
+                -DWITH_IPP=OFF `
+                -DWITH_ITT=OFF `
+                -DWITH_MSMF=OFF `
+                -DWITH_MFX=OFF `
+                -DWITH_OBSENSOR=OFF `
+                -DWITH_OPENCL=OFF `
+                -DWITH_CUDA=OFF `
+                -DWITH_OPENVINO=OFF `
+                -DWITH_VULKAN=OFF `
+                -DWITH_OPENGL=ON `
+                -DWITH_QT=OFF `
+                -DWITH_GTK=OFF `
+                -DWITH_FFMPEG=ON `
+                -DWITH_PROTOBUF=ON `
+                -DBUILD_PROTOBUF=ON `
+                -DOPENCV_DNN_ONNX=ON `
+                -DOPENCV_DNN_TFLITE=ON `
+                -DENABLE_CXX11=ON `
+                ../opencv
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "CMake configuration failed!"
+            exit 1
+          }
+
+      # ============================================================
+      # 8. 编译 OpenCV 5
+      # ============================================================
+      - name: Build OpenCV 5
+        if: steps.check_release.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          cd build_opencv
+
+          # GitHub Actions Windows runner 有 4 核
+          mingw32-make -j4
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Build failed! Trying single-threaded make for better error messages..."
+            mingw32-make
+            exit 1
+          }
+
+          Write-Host "Build succeeded!"
+
+      # ============================================================
+      # 9. 安装 (将头文件/库/DLL 复制到 install 目录)
+      # ============================================================
+      - name: Install OpenCV 5
+        if: steps.check_release.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          cd build_opencv
+          mingw32-make install
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Install failed!"
+            exit 1
+          }
+
+          # 列出安装产物
+          Write-Host ""
+          Write-Host "===== Install output ====="
+          Get-ChildItem -Path install -Recurse -File | Select-Object FullName, Length | Format-Table -AutoSize
+
+      # ============================================================
+      # 10. 打包构建结果
+      # ============================================================
+      - name: Pack build result
+        if: steps.check_release.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          $display = "${{ steps.get_tag.outputs.display }}"
+          $shared = if ("${{ inputs.build_shared }}" -eq "true") { "shared" } else { "static" }
+          $world = if ("${{ inputs.build_world }}" -eq "true") { "world" } else { "modules" }
+          $contrib = if ("${{ inputs.build_contrib }}" -eq "true") { "contrib" } else { "nocotrib" }
+
+          $zipName = "opencv-${display}-mingw-x64-${shared}-${world}-${contrib}.zip"
+          echo "zip_name=$zipName" >> $env:GITHUB_OUTPUT
+
+          Write-Host "Packing to $zipName ..."
+
+          cd build_opencv
+
+          # 清理不必要的文件以减小体积
+          # 保留: include/, lib/, bin/ (DLL), share/ (CMake 配置)
+          # 删除: 静态库的中间文件、示例源码等
+          $installDir = "install"
+
+          # 删除 cmake 缓存等无关文件
+          Get-ChildItem -Path $installDir -Recurse -Include "*.cmake" -File |
+            Where-Object { $_.DirectoryName -notmatch "share" } |
+            Remove-Item -Force
+
+          Compress-Archive -Path $installDir -DestinationPath $zipName -CompressionLevel Optimal
+
+          $size = (Get-Item $zipName).Length / 1MB
+          Write-Host "Archive size: $([math]::Round($size, 1)) MB"
+
+        id: pack
+
+      # ============================================================
+      # 11. 生成构建信息文件
+      # ============================================================
+      - name: Generate build info
+        if: steps.check_release.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          $display = "${{ steps.get_tag.outputs.display }}"
+          $info = @"
+          OpenCV $display MinGW Build Information
+          ========================================
+
+          Version:          $display
+          Compiler:         MinGW g++ (Windows)
+          C++ Standard:     C++17
+          Build Type:       Release
+          Shared Libs:      ${{ inputs.build_shared }}
+          opencv_world:     ${{ inputs.build_world }}
+          opencv_contrib:   ${{ inputs.build_contrib }}
+
+          OpenCV 5 Key Changes:
+          - New 'geometry' module (minAreaRect, convexHull, getPerspectiveTransform, etc.)
+          - Functions migrated: calib3d -> geometry, imgproc -> geometry
+          - DNN engine refactored (NEW engine + CLASSIC engine)
+          - C++17 required
+
+          Directory Layout:
+            install/
+            ├── include/opencv2/    Header files
+            ├── lib/                Import libraries (.dll.a / .a)
+            ├── bin/                DLL files (if shared build)
+            └── share/              CMake config files (OpenCVConfig.cmake)
+
+          Quick Start (MinGW g++):
+            g++ -std=c++17 -O2 main.cpp -o myapp ^
+                -I"install/include/opencv2/.." ^
+                -L"install/lib" ^
+                -lopencv_world (if world build) ^
+                OR ^
+                -lopencv_core -lopencv_imgproc -lopencv_dnn ^
+                -lopencv_geometry -lopencv_imgcodecs ^
+                -lopencv_highgui
+
+          Quick Start (CMake):
+            cmake -G "MinGW Makefiles" ^
+                  -DOpenCV_DIR="install/share/cmake/opencv5" ^
+                  ..
+            mingw32-make
+"@
+          Set-Content -Path "build_opencv/BUILD_INFO.txt" -Value $info -Encoding UTF8
+
+          # 追加到 zip
+          $zipName = "${{ steps.pack.outputs.zip_name }}"
+          Compress-Archive -Path "build_opencv/BUILD_INFO.txt" -DestinationPath $zipName -Update
+
+      # ============================================================
+      # 12. 创建 GitHub Release 并上传
+      # ============================================================
+      - name: Create GitHub Release
+        if: steps.check_release.outputs.skip == 'false'
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "opencv-mingw-${{ steps.get_tag.outputs.tag }}"
+          name: "OpenCV ${{ steps.get_tag.outputs.display }} MinGW Build"
+          body: |
+            ## OpenCV ${{ steps.get_tag.outputs.display }} MinGW Build for Windows
+
+            **Compiler:** MinGW g++ (x86_64-w64-mingw32)
+            **C++ Standard:** C++17
+            **Build Type:** Release
+            **Shared Libs:** ${{ inputs.build_shared }}
+            **opencv_world:** ${{ inputs.build_world }}
+            **opencv_contrib:** ${{ inputs.build_contrib }}
+
+            ### OpenCV 5 Key Changes
+            - **New `geometry` module**: `minAreaRect`, `convexHull`, `getPerspectiveTransform`, `findHomography` 等函数从 `calib3d`/`imgproc` 迁移到 `geometry`
+            - **链接 OpenCV 5 时必须加 `-lopencv_geometry`**
+            - **DNN 引擎重构**: 支持 NEW engine 和 CLASSIC engine
+            - **要求 C++17**
+
+            ### 目录结构
+            ```
+            install/
+            ├── include/opencv2/     头文件
+            ├── lib/                 链接库 (.dll.a / .a)
+            ├── bin/                 DLL 文件 (shared build)
+            └── share/               CMake 配置 (OpenCVConfig.cmake)
+            ```
+
+            ### 编译命令
+            **GCC 一行编译 (world):**
+            ```bash
+            g++ -std=c++17 -O2 main.cpp -o myapp \
+                -I"install/include/opencv2/.." \
+                -L"install/lib" \
+                -lopencv_world
+            ```
+
+            **GCC 一行编译 (分模块):**
+            ```bash
+            g++ -std=c++17 -O2 main.cpp -o myapp \
+                -I"install/include/opencv2/.." \
+                -L"install/lib" \
+                -lopencv_core -lopencv_imgproc -lopencv_imgcodecs \
+                -lopencv_dnn -lopencv_highgui -lopencv_geometry
+            ```
+
+            **CMake:**
+            ```bash
+            cmake -G "MinGW Makefiles" \
+                  -DOpenCV_DIR="install/cmake" \
+                  ..
+            mingw32-make
+            ```
+          draft: false
+          prerelease: false
+          files: |
+            build_opencv/${{ steps.pack.outputs.zip_name }}
+            build_opencv/BUILD_INFO.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ============================================================
+      # 13. 构建摘要
+      # ============================================================
+      - name: Build Summary
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host ""
+          Write-Host "========================================="
+          Write-Host "  OpenCV 5 MinGW Build Summary"
+          Write-Host "========================================="
+          Write-Host "  Tag:            ${{ steps.get_tag.outputs.tag }}"
+          Write-Host "  Skipped:        ${{ steps.check_release.outputs.skip }}"
+          if ("${{ steps.check_release.outputs.skip }}" -ne "true") {
+            Write-Host "  Zip:            ${{ steps.pack.outputs.zip_name }}"
+          }
+          Write-Host "========================================="
