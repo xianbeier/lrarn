@@ -472,8 +472,7 @@ jobs:
             cmake -G "MinGW Makefiles" ^
                   -DOpenCV_DIR="install/share/cmake/opencv5" ^
                   ..
-            mingw32-make
-"@
+            mingw32-make"@
           Set-Content -Path "build_opencv/BUILD_INFO.txt" -Value $info -Encoding UTF8
 
           # 追加到 zip
