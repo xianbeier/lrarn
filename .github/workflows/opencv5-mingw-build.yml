@@ -191,20 +191,19 @@ jobs:
           if (Test-Path $allocFile) {
             $content = Get-Content $allocFile -Raw -Encoding UTF8
             if ($content -match 'posix_memalign' -and -not $content.Contains('__MINGW32__')) {
-              # 在 posix_memalign 检查前添加 MinGW 守卫
-              $patch = @"
-          #if defined(__MINGW32__) || defined(__MINGW64__)
-              // MinGW: use _aligned_malloc instead of posix_memalign
-              #include <malloc.h>
-              #define HAVE_POSIX_MEMALIGN 0
-              static int mingw_aligned_alloc(void** ptr, size_t alignment, size_t size) {
-                  *ptr = _aligned_malloc(size, alignment);
-                  return (*ptr == nullptr) ? 12 : 0;
-              }
-              #define posix_memalign(ptr, align, size) mingw_aligned_alloc(ptr, align, size)
-          #endif"@
+              $nl = [Environment]::NewLine
+              $patch = "#if defined(__MINGW32__) || defined(__MINGW64__)" + $nl
+              $patch += "    // MinGW: use _aligned_malloc instead of posix_memalign" + $nl
+              $patch += "    #include <malloc.h>" + $nl
+              $patch += "    #define HAVE_POSIX_MEMALIGN 0" + $nl
+              $patch += "    static int mingw_aligned_alloc(void** ptr, size_t alignment, size_t size) {" + $nl
+              $patch += "        *ptr = _aligned_malloc(size, alignment);" + $nl
+              $patch += "        return (*ptr == nullptr) ? 12 : 0;" + $nl
+              $patch += "    }" + $nl
+              $patch += "    #define posix_memalign(ptr, align, size) mingw_aligned_alloc(ptr, align, size)" + $nl
+              $patch += "#endif" + $nl
               # 在第一个 #include 之前插入
-              $newContent = $content -replace '(#include)', "$patch`n`$1"
+              $newContent = $content -replace '(#include)', ($patch + '$1')
               if ($newContent -ne $content) {
                 Set-Content -Path $allocFile -Value $newContent -NoNewline -Encoding UTF8
                 Write-Host "  [OK] Patched $allocFile"
@@ -217,11 +216,16 @@ jobs:
           if (Test-Path $exrFile) {
             $content = Get-Content $exrFile -Raw -Encoding UTF8
             if ($content -match 'posix_memalign' -and -not $content.Contains('__MINGW32__')) {
-              # 在 posix_memalign 分支添加 __MINGW32__ 守卫
-              $newContent = $content -replace '(#else\s*//\s*GNUC.*\n)(\s*int\s+err\s*=\s*posix_memalign)', "`$1#if defined(__MINGW32__) || defined(__MINGW64__)`n            ptr = _aligned_malloc(size, alignment);`n            int err = (ptr == nullptr) ? 12 : 0;`n          #else`n$2"
+              $nl = [Environment]::NewLine
+              $mingwBlock = "#if defined(__MINGW32__) || defined(__MINGW64__)" + $nl
+              $mingwBlock += "            ptr = _aligned_malloc(size, alignment);" + $nl
+              $mingwBlock += "            int err = (ptr == nullptr) ? 12 : 0;" + $nl
+              $mingwBlock += "          #else" + $nl
+              # 在 posix_memalign 分支添加 MinGW 守卫
+              $newContent = $content -replace '(#else\s*//\s*GNUC.*\n)(\s*int\s+err\s*=\s*posix_memalign)', ('$1' + $mingwBlock + '$2')
               if ($newContent -ne $content) {
-                # 在文件末尾的 #endif 之前补上 #endif
-                $newContent = $newContent -replace '(#endif\s*//\s*_WIN32)', "#endif // __MINGW32__`n          $1"
+                # 在对应的 #endif 之前补上 #endif
+                $newContent = $newContent -replace '(#endif\s*//\s*_WIN32)', ("#endif // __MINGW32__" + $nl + '          $1')
                 Set-Content -Path $exrFile -Value $newContent -NoNewline -Encoding UTF8
                 Write-Host "  [OK] Patched $exrFile"
               }
@@ -233,7 +237,7 @@ jobs:
           if (Test-Path $zlibFile) {
             $content = Get-Content $zlibFile -Raw -Encoding UTF8
             if ($content -match 'posix_memalign' -and -not $content.Contains('__MINGW32__')) {
-              $newContent = $content -replace '(#ifdef _WIN32)', "#if defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__)"
+              $newContent = $content -replace '#ifdef _WIN32', '#if defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__)'
               if ($newContent -ne $content) {
                 Set-Content -Path $zlibFile -Value $newContent -NoNewline -Encoding UTF8
                 Write-Host "  [OK] Patched $zlibFile"
@@ -246,7 +250,7 @@ jobs:
           if (Test-Path $opjFile) {
             $content = Get-Content $opjFile -Raw -Encoding UTF8
             if ($content -match 'posix_memalign' -and -not $content.Contains('__MINGW32__')) {
-              $newContent = $content -replace '(#ifdef _WIN32)', "#if defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__)"
+              $newContent = $content -replace '#ifdef _WIN32', '#if defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__)'
               if ($newContent -ne $content) {
                 Set-Content -Path $opjFile -Value $newContent -NoNewline -Encoding UTF8
                 Write-Host "  [OK] Patched $opjFile"
@@ -262,7 +266,12 @@ jobs:
           if (Test-Path $gapiFile) {
             $content = Get-Content $gapiFile -Raw -Encoding UTF8
             if ($content -match 'posix_memalign' -and -not $content.Contains('__MINGW32__')) {
-              $newContent = $content -replace '(#else\s*//\s*!_WIN32)(.*?posix_memalign)', "#if defined(__MINGW32__) || defined(__MINGW64__)`n            ptr = _aligned_malloc(size, 64);`n            int err = (ptr == nullptr) ? 12 : 0;`n          #else`n$2"
+              $nl = [Environment]::NewLine
+              $mingwBlock = "#if defined(__MINGW32__) || defined(__MINGW64__)" + $nl
+              $mingwBlock += "            ptr = _aligned_malloc(size, 64);" + $nl
+              $mingwBlock += "            int err = (ptr == nullptr) ? 12 : 0;" + $nl
+              $mingwBlock += "          #else" + $nl
+              $newContent = $content -replace '(#else\s*//\s*!_WIN32)(.*?posix_memalign)', ('$1' + $nl + $mingwBlock + '$2')
               if ($newContent -ne $content) {
                 Set-Content -Path $gapiFile -Value $newContent -NoNewline -Encoding UTF8
                 Write-Host "  [OK] Patched $gapiFile"
@@ -433,46 +442,36 @@ jobs:
         shell: pwsh
         run: |
           $display = "${{ steps.get_tag.outputs.display }}"
-          $info = @"
-          OpenCV $display MinGW Build Information
-          ========================================
+          $nl = [Environment]::NewLine
+          $info = "OpenCV $display MinGW Build Information" + $nl
+          $info += "========================================" + $nl + $nl
+          $info += "Version:          $display" + $nl
+          $info += "Compiler:         MinGW g++ (Windows)" + $nl
+          $info += "C++ Standard:     C++17" + $nl
+          $info += "Build Type:       Release" + $nl
+          $info += "Shared Libs:      ${{ inputs.build_shared }}" + $nl
+          $info += "opencv_world:     ${{ inputs.build_world }}" + $nl
+          $info += "opencv_contrib:   ${{ inputs.build_contrib }}" + $nl + $nl
+          $info += "OpenCV 5 Key Changes:" + $nl
+          $info += "- New 'geometry' module (minAreaRect, convexHull, getPerspectiveTransform, etc.)" + $nl
+          $info += "- Functions migrated: calib3d -> geometry, imgproc -> geometry" + $nl
+          $info += "- DNN engine refactored (NEW engine + CLASSIC engine)" + $nl
+          $info += "- C++17 required" + $nl + $nl
+          $info += "Directory Layout:" + $nl
+          $info += "  install/" + $nl
+          $info += "  +-- include/opencv2/    Header files" + $nl
+          $info += "  +-- lib/                Import libraries (.dll.a / .a)" + $nl
+          $info += "  +-- bin/                DLL files (if shared build)" + $nl
+          $info += "  +-- share/              CMake config files (OpenCVConfig.cmake)" + $nl + $nl
+          $info += "Quick Start (MinGW g++, world build):" + $nl
+          $info += '  g++ -std=c++17 -O2 main.cpp -o myapp -I"install/include/opencv2/.." -L"install/lib" -lopencv_world' + $nl + $nl
+          $info += "Quick Start (MinGW g++, modules):" + $nl
+          $info += '  g++ -std=c++17 -O2 main.cpp -o myapp -I"install/include/opencv2/.." -L"install/lib"' + $nl
+          $info += '      -lopencv_core -lopencv_imgproc -lopencv_dnn -lopencv_geometry -lopencv_imgcodecs -lopencv_highgui' + $nl + $nl
+          $info += "Quick Start (CMake):" + $nl
+          $info += '  cmake -G "MinGW Makefiles" -DOpenCV_DIR="install/share/cmake/opencv5" ..' + $nl
+          $info += '  mingw32-make' + $nl
 
-          Version:          $display
-          Compiler:         MinGW g++ (Windows)
-          C++ Standard:     C++17
-          Build Type:       Release
-          Shared Libs:      ${{ inputs.build_shared }}
-          opencv_world:     ${{ inputs.build_world }}
-          opencv_contrib:   ${{ inputs.build_contrib }}
-
-          OpenCV 5 Key Changes:
-          - New 'geometry' module (minAreaRect, convexHull, getPerspectiveTransform, etc.)
-          - Functions migrated: calib3d -> geometry, imgproc -> geometry
-          - DNN engine refactored (NEW engine + CLASSIC engine)
-          - C++17 required
-
-          Directory Layout:
-            install/
-            ├── include/opencv2/    Header files
-            ├── lib/                Import libraries (.dll.a / .a)
-            ├── bin/                DLL files (if shared build)
-            └── share/              CMake config files (OpenCVConfig.cmake)
-
-          Quick Start (MinGW g++):
-            g++ -std=c++17 -O2 main.cpp -o myapp ^
-                -I"install/include/opencv2/.." ^
-                -L"install/lib" ^
-                -lopencv_world (if world build) ^
-                OR ^
-                -lopencv_core -lopencv_imgproc -lopencv_dnn ^
-                -lopencv_geometry -lopencv_imgcodecs ^
-                -lopencv_highgui
-
-          Quick Start (CMake):
-            cmake -G "MinGW Makefiles" ^
-                  -DOpenCV_DIR="install/share/cmake/opencv5" ^
-                  ..
-            mingw32-make"@
           Set-Content -Path "build_opencv/BUILD_INFO.txt" -Value $info -Encoding UTF8
 
           # 追加到 zip
