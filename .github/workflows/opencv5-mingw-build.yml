@@ -202,8 +202,7 @@ jobs:
                   return (*ptr == nullptr) ? 12 : 0;
               }
               #define posix_memalign(ptr, align, size) mingw_aligned_alloc(ptr, align, size)
-          #endif
-"@
+          #endif"@
               # 在第一个 #include 之前插入
               $newContent = $content -replace '(#include)', "$patch`n`$1"
               if ($newContent -ne $content) {
