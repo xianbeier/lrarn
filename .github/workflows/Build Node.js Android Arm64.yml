@@ -1,0 +1,81 @@
+name: Build Node.js Android Arm64
+
+on: 
+  workflow_dispatch:
+    inputs:
+      node_version:
+        description: '要编译的 Node.js 版本 (例如: v24.19.0)'
+        required: true
+        default: 'v24.19.0'
+        type: string
+
+env:
+  # 动态读取网页端输入的版本号
+  NODE_VERSION: ${{ inputs.node_version }}
+  PYTHON_VERSION: '3.12'
+  NDK_VERSION: 'r26c'
+  CACHE_VERSION: v2
+
+jobs:
+  Android-Arm64:
+    # 已移除 PR 草稿状态判断，确保手动触发时能正常运行
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Print environments
+      run: printenv
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential
+
+    - name: Setup Android NDK
+      uses: nttld/setup-ndk@v1
+      id: setup-ndk
+      with:
+        ndk-version: ${{ env.NDK_VERSION }}
+
+    - name: Download Node.js source
+      run: curl -O https://nodejs.org/dist/${{ env.NODE_VERSION }}/node-${{ env.NODE_VERSION }}.tar.gz
+
+    - name: Extract Node.js source
+      run: |
+        tar -zxf ./node-${{ env.NODE_VERSION }}.tar.gz -C ./
+        mv node-${{ env.NODE_VERSION }} node
+        rm ./node-${{ env.NODE_VERSION }}.tar.gz
+
+    - name: Apply common patches
+      run: ./scripts/patch.sh apply -f
+
+    - name: Cache build output
+      uses: actions/cache@v4
+      with:
+        path: ./node/out
+        key: node-out-android-${{ env.NODE_VERSION }}-arm64-${{ env.CACHE_VERSION }}-${{ hashFiles('**/scripts/build_android.sh') }}
+        restore-keys: |
+          node-out-android-${{ env.NODE_VERSION }}-arm64-${{ env.CACHE_VERSION }}-
+
+    - name: Build Node.js for Android (arm64)
+      env:
+        ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+      run: ./scripts/build_android.sh arm64
+
+    - name: Get short SHA
+      id: slug
+      run: echo "sha8=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_OUTPUT
+
+    - name: Upload Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: libnode-${{ env.NODE_VERSION }}-${{ steps.slug.outputs.sha8 }}-android-arm64
+        path: ./artifacts/android/arm64
+        retention-days: 1
