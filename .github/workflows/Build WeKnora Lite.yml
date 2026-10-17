@@ -7,6 +7,10 @@ on:
         description: 'Build tag/name (e.g., v0.8.4-win)'
         required: true
         default: 'v0.8.4-win-build'
+      repo:
+        description: '要构建的仓库地址 (owner/repo)'
+        required: true
+        default: 'Tencent/WeKnora'
 
 concurrency:
   group: build-lite-win-${{ github.ref }}
@@ -26,14 +30,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo }}  # 关键：克隆指定的 WeKnora 仓库
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          # 移除 cache 和 cache-dependency-path 避免找不到 lockfile 报错
       - name: Build frontend
         working-directory: frontend
         run: |
-          # 将 npm ci 改为 npm install 兼容无 lockfile 的情况
           npm install
           npm run build
       - uses: actions/upload-artifact@v4
@@ -51,6 +55,8 @@ jobs:
       CGO_ENABLED: 1
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo }}  # 关键：克隆指定的 WeKnora 仓库
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -116,6 +122,8 @@ jobs:
       CGO_ENABLED: 1
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo }}  # 关键：克隆指定的 WeKnora 仓库
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -123,7 +131,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          # 同样移除缓存配置以避免报错
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
