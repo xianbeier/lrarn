@@ -7,8 +7,8 @@ on:
         description: 'Build tag/name (e.g., v0.8.4-win)'
         required: true
         default: 'v0.8.4-win-build'
-      repo:
-        description: '要构建的仓库地址 (owner/repo)'
+      source_repo:
+        description: 'Source repository to build from'
         required: true
         default: 'Tencent/WeKnora'
 
@@ -22,6 +22,7 @@ permissions:
 env:
   GO_VERSION: "1.26"
   NODE_VERSION: "22"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   # ── 1. 构建前端 ──
@@ -31,15 +32,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repo }}  # 关键：克隆指定的 WeKnora 仓库
+          repository: ${{ inputs.source_repo }}  # 关键修复：拉取官方源码
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json # 恢复原版缓存
+
       - name: Build frontend
         working-directory: frontend
         run: |
-          npm install
+          npm ci  # 恢复原版 npm ci，更快更稳
           npm run build
+
       - uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
@@ -56,16 +62,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repo }}  # 关键：克隆指定的 WeKnora 仓库
+          repository: ${{ inputs.source_repo }}  # 关键修复：拉取官方源码
+
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+
       - uses: actions/download-artifact@v4
         with:
           name: frontend-dist
           path: web/
 
+      # 修复 Windows 下 DuckDB/MinGW 链接报错 (Issue #3401 Bug 4)
       - name: Setup MSYS2 UCRT64
         uses: msys2/setup-msys2@v2
         with:
@@ -123,17 +132,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repo }}  # 关键：克隆指定的 WeKnora 仓库
+          repository: ${{ inputs.source_repo }}  # 关键修复：拉取官方源码
+
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json # 恢复原版缓存
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
       - name: Install NSIS
         run: choco install nsis -y
 
