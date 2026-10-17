@@ -12,7 +12,6 @@ concurrency:
   group: build-lite-win-${{ github.ref }}
   cancel-in-progress: true
 
-# 不需要发布 Release，移除 contents: write 权限
 permissions:
   contents: read
 
@@ -30,12 +29,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          # 移除 cache 和 cache-dependency-path 避免找不到 lockfile 报错
       - name: Build frontend
         working-directory: frontend
         run: |
-          npm ci
+          # 将 npm ci 改为 npm install 兼容无 lockfile 的情况
+          npm install
           npm run build
       - uses: actions/upload-artifact@v4
         with:
@@ -61,7 +60,6 @@ jobs:
           name: frontend-dist
           path: web/
 
-      # 使用 UCRT64 解决 DuckDB/MinGW 链接报错 (Issue #3401 Bug 4)
       - name: Setup MSYS2 UCRT64
         uses: msys2/setup-msys2@v2
         with:
@@ -101,7 +99,6 @@ jobs:
           tar -czf "${ARCHIVE}.tar.gz" "${ARCHIVE}"
           sha256sum "${ARCHIVE}.tar.gz" > "${ARCHIVE}.tar.gz.sha256"
 
-      # 将产物上传到 Actions Artifacts
       - uses: actions/upload-artifact@v4
         with:
           name: WeKnora-CLI-Windows
@@ -126,8 +123,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          # 同样移除缓存配置以避免报错
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
@@ -186,7 +182,6 @@ jobs:
           cp "$INSTALLER" "${ARCHIVE}_setup.exe"
           sha256sum "${ARCHIVE}_setup.exe" > "${ARCHIVE}_setup.exe.sha256"
 
-      # 将产物上传到 Actions Artifacts
       - uses: actions/upload-artifact@v4
         with:
           name: WeKnora-Desktop-Windows
